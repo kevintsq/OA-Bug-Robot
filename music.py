@@ -10,8 +10,9 @@ def play_sound(filename):
     return player.get_length()
 
 
-time = play_sound("makerobo.mp3") / 1000
-if time < 5:
-    sleep(5)
-else:
-    sleep(time)
+while True:
+    time = play_sound("sound.mp3") / 1000
+    if time < 6:
+        sleep(6)
+    else:
+        sleep(time)

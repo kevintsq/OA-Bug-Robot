@@ -612,9 +612,9 @@ class Robot(Thread):
         self.enable_vision()
         # self.video_capture.set(cv.CAP_PROP_FRAME_WIDTH, WIDTH) 
         # self.video_capture.set(cv.CAP_PROP_FRAME_HEIGHT, HEIGHT)
-        self.set_servo_angle(self.PITCH_SERVO, 15)
+        self.set_servo_angle(self.PITCH_SERVO, 10)
         self.set_servo_angle(self.YAW_SERVO, 85)
-        self.wait_for_button_pressed()
+        # self.wait_for_button_pressed()
         
         while True:
             ret, self.saw_img = self.video_capture.read()
