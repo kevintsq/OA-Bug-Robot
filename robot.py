@@ -22,7 +22,7 @@ PORT = 8080
 
 
 class Robot(Thread):
-    INFO_CMD_STRUCT = Frame(">BBBBB")
+    INFO_CMD_STRUCT = Frame(">BBBB")
     SPEED_CONTROL_STRUCT = Frame(">BBBBfff")
     SPEED_INFO_STRUCT = Frame(">fff")
     BATTERY_INFO_STRUCT = Frame(">HHHB")
@@ -74,8 +74,8 @@ class Robot(Thread):
     def __init__(self, enable_vision=False, *args, **kwargs):
         super().__init__(daemon=True, *args, **kwargs)
 
-        if os.path.exists('/dev/serial'):
-            serial_devices = os.listdir('/dev/serial')
+        if os.path.exists('/dev/serial/by-id'):
+            serial_devices = os.listdir('/dev/serial/by-id')
         else:
             serial_devices = []
 
@@ -111,16 +111,16 @@ class Robot(Thread):
         self.timer.timeout.connect(self.update_battery_info)  # must use QTimes to avoid QProgressBar segfault
 
         # these infos must be created before the server is ready
-        self.auditory_info = SharedInfo()
-        self.olfactory_info = SharedInfo()
-        self.motion_info = SharedInfo()
+        self.auditory_info = Shared()
+        self.olfactory_info = Shared()
+        self.motion_info = Shared()
 
         self.server = ThreadingTCPServer(self, (HOST, PORT), ThreadingTCPRequestHandler)
         self.server.allow_reuse_address = True
         # Start a thread with the server -- that thread will then start one more thread for each request
         server_thread = Thread(target=self.server.serve_forever, daemon=True)
         server_thread.start()
-        print(f"Server loop running in thread: {server_thread.native_id}...")
+        print(f"Server loop running in thread: {server_thread.name}...")
 
         self.controller = None
         self.auditory_process = None
@@ -150,7 +150,7 @@ class Robot(Thread):
         print("Cleaning up...")
         if self.controller:
             self.stop()
-            self.controller.close()
+            self.controller.get().close()
         # GPIO.cleanup()
         if self.motion_process:
             self.motion_process.terminate()
@@ -167,14 +167,14 @@ class Robot(Thread):
 
     def update_battery_info(self):
         voltage, current, temperature, remaining = self.get_battery_info()
-        views.mainWindow.batteryVoltage.setText(f"{voltage:.2f} V")
-        views.mainWindow.batteryCurrent.setText(f"{current:.2f} A")
-        views.mainWindow.batteryTemperature.setText(f"{temperature:.2f} ℃")
-        views.mainWindow.batteryRemaining.setValue(remaining)
+        self.controlPanel.batteryVoltage.setText(f"{voltage:.2f} V")
+        self.controlPanel.batteryCurrent.setText(f"{current:.2f} A")
+        self.controlPanel.batteryTemperature.setText(f"{temperature:.2f} ℃")
+        self.controlPanel.batteryRemaining.setValue(remaining)
 
     def on_go_button_clicked(self):
-        self.set_speed(views.mainWindow.xSpeedSpinBox.value(),
-                       views.mainWindow.zSpeedSpinBox.value())
+        self.set_speed(self.controlPanel.xSpeedSpinBox.value(),
+                       self.controlPanel.zSpeedSpinBox.value())
 
     def on_stop_button_clicked(self):
         self.stop()
@@ -190,12 +190,12 @@ class Robot(Thread):
 
     def setup_controller(self):
         if self.controller is None:
-            self.controller = Serial(f"/dev/serial/{self.controlPanel.controllerDropdown.currentText()}", 230400)
+            self.controller = Shared(Serial(f"/dev/serial/by-id/{self.controlPanel.controllerDropdown.currentText()}", 230400))
             self.controlPanel.controllerButton.setText("Disconnect")
             self.timer.start(1000)
         else:
             self.timer.stop()
-            self.controller.close()
+            self.controller.get().close()
             self.controller = None
             self.controlPanel.controllerButton.setText("Connect")
 
@@ -203,7 +203,7 @@ class Robot(Thread):
         if self.auditory_process is None:
             self.auditory_process = subprocess.Popen(("/home/pi/BluetoothAoaLocator/build/BluetoothAoaLocator",
                                                       "-s", HOST, str(PORT),
-                                                      "-u", f"/dev/serial/{self.controlPanel.auditoryDropdown.currentText()}"))
+                                                      "-u", f"/dev/serial/by-id/{self.controlPanel.auditoryDropdown.currentText()}"))
             print(f"BluetoothAoaLocator client loop running in process: {self.auditory_process.pid}...")
             self.controlPanel.auditoryButton.setText("Disconnect")
         else:
@@ -213,9 +213,9 @@ class Robot(Thread):
 
     def setup_olfactory(self):
         if self.olfactory_thread is None:
-            self.olfactory_thread = Olfactory(f"/dev/serial/{self.controlPanel.olfactoryDropdown.currentText()}", self)
+            self.olfactory_thread = Olfactory(f"/dev/serial/by-id/{self.controlPanel.olfactoryDropdown.currentText()}", self)
             self.olfactory_thread.start()
-            print(f"Gas sensor client loop running in thread {self.olfactory_thread.native_id}...")
+            print(f"Gas sensor client loop running in thread {self.olfactory_thread.name}...")
             self.controlPanel.olfactoryButton.setText("Disconnect")
         else:
             self.olfactory_thread.stop()
@@ -225,7 +225,7 @@ class Robot(Thread):
     def setup_motion(self):
         if self.motion_process is None:
             self.motion_process = subprocess.Popen(("/home/pi/Robot/JY901S_socket", HOST, str(PORT),
-                                                    f"/dev/serial/{self.controlPanel.motionDropdown.currentText()}"))
+                                                    f"/dev/serial/by-id/{self.controlPanel.motionDropdown.currentText()}"))
             print(f"Motion sensor client loop running in process: {self.motion_process.pid}...")
             self.controlPanel.motionButton.setText("Disconnect")
         else:
@@ -258,8 +258,8 @@ class Robot(Thread):
 
     def set_speed(self, x, z):
         cmd = Robot.SPEED_CONTROL_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x0D, 0x01, x, 0, z)
-        self.controller.write(cmd)
-        self.controller.read_all()
+        self.controller.get().write(cmd)
+        self.controller.get().read_all()
 
     def get_speed(self):
         """:returns x_speed, y_speed, z_speed"""

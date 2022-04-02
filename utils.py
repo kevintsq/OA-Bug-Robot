@@ -127,16 +127,17 @@ class ThreadingTCPRequestHandler(socketserver.BaseRequestHandler):
                     return
 
 
-class SharedInfo:
-    def __init__(self):
-        self.info: dict = None
+class Shared:
+    def __init__(self, initial=None, needs_update=False):
+        self.__shared = initial
         self.lock = Condition()
+        self.needs_update = needs_update
         self.updated = False
         self.finished = False
 
     def update(self, info):
         with self.lock:
-            self.info = info
+            self.__shared = info
             self.updated = True
             self.lock.notify()
 
@@ -144,9 +145,10 @@ class SharedInfo:
         with self.lock:
             if self.finished:
                 raise Exception("SharedInfo is finished.")
-            self.lock.wait_for(self.is_updated)
+            if self.needs_update:
+                self.lock.wait_for(self.is_updated)
             self.updated = False
-            return self.info
+            return self.__shared
 
     def is_updated(self):
         return self.updated
