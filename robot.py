@@ -4,16 +4,17 @@
 # from time import sleep
 # import math
 import os
-from threading import Thread
 import subprocess
 
 # import numpy as np
 # import cv2 as cv
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QApplication
 
 from state import *
 from utils import *
-import visualization
+import views
 
 
 HOST = "127.0.0.1"
@@ -78,7 +79,13 @@ class Robot(Thread):
         else:
             serial_devices = []
 
-        self.controlPanel = visualization.mainWindow.controlPanel
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+        self.app = QApplication(sys.argv)
+        self.app.setWindowIcon(QIcon("plane.svg"))
+        self.app.beep()
+        self.mainWindow = views.MainWindow()
+        self.controlPanel = self.mainWindow.controlPanel
 
         if len(serial_devices) == 0:
             self.controlPanel.controllerButton.setEnabled(False)
@@ -99,8 +106,9 @@ class Robot(Thread):
         self.controlPanel.goButton.clicked.connect(self.on_go_button_clicked)
         self.controlPanel.stopButton.clicked.connect(self.on_stop_button_clicked)
 
+        self.stop_event = Event()
         self.timer = QTimer()
-        self.timer.timeout.connect(self.update_battery_info)
+        self.timer.timeout.connect(self.update_battery_info)  # must use QTimes to avoid QProgressBar segfault
 
         # these infos must be created before the server is ready
         self.auditory_info = SharedInfo()
@@ -159,17 +167,26 @@ class Robot(Thread):
 
     def update_battery_info(self):
         voltage, current, temperature, remaining = self.get_battery_info()
-        visualization.mainWindow.batteryVoltage.setText(f"{voltage:.2f} V")
-        visualization.mainWindow.batteryCurrent.setText(f"{current:.2f} A")
-        visualization.mainWindow.batteryTemperature.setText(f"{temperature:.2f} ℃")
-        visualization.mainWindow.batteryRemaining.setValue(remaining)
+        views.mainWindow.batteryVoltage.setText(f"{voltage:.2f} V")
+        views.mainWindow.batteryCurrent.setText(f"{current:.2f} A")
+        views.mainWindow.batteryTemperature.setText(f"{temperature:.2f} ℃")
+        views.mainWindow.batteryRemaining.setValue(remaining)
 
     def on_go_button_clicked(self):
-        self.set_speed(visualization.mainWindow.xSpeedSpinBox.value(),
-                       visualization.mainWindow.zSpeedSpinBox.value())
+        self.set_speed(views.mainWindow.xSpeedSpinBox.value(),
+                       views.mainWindow.zSpeedSpinBox.value())
 
     def on_stop_button_clicked(self):
         self.stop()
+        self.stop_event.set()
+        self.controlPanel.startButton.setText("Start the Algorithm")
+        self.controlPanel.setEnabled(True)
+
+    def on_start_button_clicked(self):
+        self.stop_event.clear()
+        self.controlPanel.startButton.setText("Algorithm Started. Press Stop to Stop...")
+        self.controlPanel.setEnabled(False)
+        self.start()
 
     def setup_controller(self):
         if self.controller is None:
@@ -334,6 +351,10 @@ class Robot(Thread):
         #     if not self.video_capture.isOpened():
         #         raise Exception("Cannot open camera.")
 
+    def exec(self):
+        self.mainWindow.show()
+        sys.exit(self.app.exec())
+
     def run(self):
         """Main Loop for the robot's control logic. Put your code below `while True:`."""
         raise NotImplemented  # TODO
@@ -345,5 +366,4 @@ class Robot(Thread):
 
 if __name__ == '__main__':
     with Robot() as robot:
-        # robot.start()
-        visualization.run()
+        robot.exec()

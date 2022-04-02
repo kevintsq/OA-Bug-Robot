@@ -47,6 +47,7 @@ class Olfactory(Thread):
         self.stop_event.set()
 
     def run(self):
+        self.stop_event.clear()
         buffer = b''
         while b'\r' not in buffer and not self.stop_event.is_set():
             buffer = self.serial.readline()
@@ -74,7 +75,7 @@ class Olfactory(Thread):
                     continue
                 self.robot.olfactory_info.update(result)
                 if self.robot.debug_type == Debug.OTHER and result["timeStamp"] % 50 == 0:
-                    self.robot.visualization.mainWindow.updateCharts(result)
+                    self.robot.mainWindow.updateCharts(result)
 
 
 class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -112,15 +113,15 @@ class ThreadingTCPRequestHandler(socketserver.BaseRequestHandler):
                 if result["type"] == "auditory":
                     robot.auditory_info.update(result)
                     if robot.debug_type == Debug.OTHER:
-                        robot.visualization.mainWindow.updateSoundSphere(result)
+                        robot.mainWindow.updateSoundSphere(result)
                 elif result["type"] == "olfactory":
                     robot.olfactory_info.update(result)
                     if robot.debug_type == Debug.OTHER and result["timeStamp"] % 50 == 0:
-                        robot.visualization.mainWindow.updateCharts(result)
+                        robot.mainWindow.updateCharts(result)
                 elif result["type"] == "motion":
                     robot.motion_info.update(result)
                     if robot.debug_type == Debug.OTHER:
-                        robot.visualization.mainWindow.updateCompass(result)
+                        robot.mainWindow.updateCompass(result)
                 else:
                     print("Bad format.", file=sys.stderr)
                     return

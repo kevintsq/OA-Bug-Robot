@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QProgres
 from PyQt5.QtGui import QPainter, QImage, QPixmap, QIcon
 from PyQt5.QtCore import Qt
 
-
 PI2 = math.pi * 2
 TAG_IDS = ["8B", "AC", "C3", "D2"]
 
@@ -60,6 +59,7 @@ class ControlPanel(QWidget):
         self.zSpeedSpinBox.setMinimum(-2)
         self.goButton = QPushButton("Go", self)
         self.stopButton = QPushButton("Stop", self)
+        self.startButton = QPushButton("Start the Algorithm", self)
 
         layout = QGridLayout()
         # row, column, rowspan, columnspan
@@ -91,6 +91,7 @@ class ControlPanel(QWidget):
         layout.addWidget(self.zSpeedSpinBox, 9, 1, 1, 2)
         layout.addWidget(self.goButton, 10, 0, 1, 2)
         layout.addWidget(self.stopButton, 10, 2)
+        layout.addWidget(self.startButton, 11, 0, 1, 3)
         self.setLayout(layout)
 
 
@@ -125,7 +126,6 @@ class ChartView(QChartView):
             self.series[name] = s
         # self.series.setPointLabelsVisible(True)
         self.setChart(self.chart)
-    
 
     def redraw(self, index):
         self.yAxis.setRange(self.yMin - 2, self.yMax + 2)
@@ -174,7 +174,7 @@ class CameraView(QLabel):
         image = QImage(image.data, image.shape[1], image.shape[0], QImage.Format_RGB888).rgbSwapped()
         pixmap = QPixmap(image)
         self.setPixmap(pixmap)
-                    #    .scaled(self.parent().width() // 4, self.parent().height() // 2, Qt.KeepAspectRatio))
+        #    .scaled(self.parent().width() // 4, self.parent().height() // 2, Qt.KeepAspectRatio))
 
 
 class CompassView(QChartView):
@@ -259,19 +259,6 @@ class MainWindow(QWidget):
         self.compassView.updateCompass(data)
 
 
-QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-app = QApplication(sys.argv)
-app.setWindowIcon(QIcon("plane.svg"))
-app.beep()
-mainWindow = MainWindow()
-
-
-def run():
-    mainWindow.show()
-    sys.exit(app.exec())
-
-
 def test():
     IPC_TYPE = "SOCKET"
 
@@ -333,7 +320,20 @@ def test():
 
 if __name__ == "__main__":
     from threading import Thread
-    
+
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("plane.svg"))
+    app.beep()
+    mainWindow = MainWindow()
+
+
+    def run():
+        mainWindow.show()
+        sys.exit(app.exec())
+
+
     test_thread = Thread(target=test, args=(), daemon=True)
     test_thread.start()
     run()
