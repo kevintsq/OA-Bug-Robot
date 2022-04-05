@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# from time import sleep
+from time import sleep
 # import math
 import os
 import subprocess
@@ -178,15 +178,23 @@ class Robot(Thread):
 
     def on_front_button_pressed(self):
         self.go_front(abs(self.controlPanel.xSpeedSpinBox.value()))
+        # sleep(1)
+        # self.stop()
 
     def on_back_button_pressed(self):
         self.go_back(abs(self.controlPanel.xSpeedSpinBox.value()))
+        # sleep(1)
+        # self.stop()
 
     def on_left_button_pressed(self):
         self.turn_left(abs(self.controlPanel.zSpeedSpinBox.value()))
+        # sleep(1)
+        # self.stop()
 
     def on_right_button_pressed(self):
         self.turn_right(abs(self.controlPanel.zSpeedSpinBox.value()))
+        # sleep(1)
+        # self.stop()
 
     def on_go_button_clicked(self):
         self.set_speed(self.controlPanel.xSpeedSpinBox.value(),
@@ -225,7 +233,7 @@ class Robot(Thread):
             with open("/home/pi/catkin_ws/src/rplidar_ros/launch/rplidar.launch", "w") as f:
                 f.write(f"""<launch>
   <node name="rplidarNode"          pkg="rplidar_ros"  type="rplidarNode" output="screen">
-  <param name="serial_port"         type="string" value="/dev/serial/by-id/{self.controlPanel.auditoryDropdown.currentText()}"/>
+  <param name="serial_port"         type="string" value="/dev/serial/by-id/{self.controlPanel.visionDropdown.currentText()}"/>
   <param name="serial_baudrate"     type="int"    value="115200"/><!--A1/A2 -->
   <!--param name="serial_baudrate"     type="int"    value="256000"--><!--A3 -->
   <param name="frame_id"            type="string" value="laser"/>

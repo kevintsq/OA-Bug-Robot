@@ -42,26 +42,31 @@ class ControlPanel(QWidget):
         self.controllerDropdown = QComboBox(self)
         self.controllerButton = QPushButton(self)
         self.controllerButton.setText("Connect")
+        self.controllerDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         visionLabel = QLabel("Vision", self)
         self.visionDropdown = QComboBox(self)
         self.visionButton = QPushButton(self)
         self.visionButton.setText("Connect")
+        self.visionDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         auditoryLabel = QLabel("Auditory", self)
         self.auditoryDropdown = QComboBox(self)
         self.auditoryButton = QPushButton(self)
         self.auditoryButton.setText("Connect")
+        self.auditoryDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         olfactoryLabel = QLabel("Olfactory", self)
         self.olfactoryDropdown = QComboBox(self)
         self.olfactoryButton = QPushButton(self)
         self.olfactoryButton.setText("Connect")
+        self.olfactoryDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         motionLabel = QLabel("Motion", self)
         self.motionDropdown = QComboBox(self)
         self.motionButton = QPushButton(self)
         self.motionButton.setText("Connect")
+        self.motionDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         batteryVoltageLabel = QLabel("Voltage", self)
         self.batteryVoltage = QLabel(self)
