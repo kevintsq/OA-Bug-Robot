@@ -71,7 +71,7 @@ class Robot(Thread):
             else:
                 robot.go_following_wall()
 
-    def __init__(self, enable_vision=False, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(daemon=True, *args, **kwargs)
 
         serial_devices = ['../../serial0']
@@ -91,11 +91,13 @@ class Robot(Thread):
             self.controlPanel.setConnectionButtonsEnabled(False)
 
         self.controlPanel.controllerDropdown.addItems(serial_devices)
+        self.controlPanel.visionDropdown.addItems(serial_devices)
         self.controlPanel.auditoryDropdown.addItems(serial_devices)
         self.controlPanel.olfactoryDropdown.addItems(serial_devices)
         self.controlPanel.motionDropdown.addItems(serial_devices)
 
         self.controlPanel.controllerButton.clicked.connect(self.setup_controller)
+        self.controlPanel.visionButton.clicked.connect(self.setup_vision)
         self.controlPanel.auditoryButton.clicked.connect(self.setup_auditory)
         self.controlPanel.olfactoryButton.clicked.connect(self.setup_olfactory)
         self.controlPanel.motionButton.clicked.connect(self.setup_motion)
@@ -126,12 +128,11 @@ class Robot(Thread):
         print(f"Server loop running in thread: {server_thread.name}...")
 
         self.controller = None
+        self.vision_process = None
         self.auditory_process = None
         self.olfactory_thread = None
         self.motion_process = None
-        self.video_capture = None
-        if enable_vision:
-            self.setup_vision()
+
         # self.saw_img = None
         # self.contours = None
         self.turning_point = False
@@ -155,15 +156,15 @@ class Robot(Thread):
             self.stop()
             self.controller.get().close()
         # GPIO.cleanup()
+        if self.vision_process:
+            self.vision_process.terminate()
+            # self.video_capture.release()
+            # cv.destroyAllWindows()
         if self.motion_process:
             self.motion_process.terminate()
         if self.auditory_process:
             self.auditory_process.terminate()
         # no need to clean up olfactory
-        if self.video_capture:
-            raise NotImplemented  # TODO: Put the LiDAR cleanup code here.
-            # self.video_capture.release()
-            # cv.destroyAllWindows()
         self.server.shutdown()
         self.server.server_close()
         print("Done.")
@@ -217,6 +218,33 @@ class Robot(Thread):
             self.controller = None
             self.controlPanel.controllerButton.setText("Connect")
             self.controlPanel.setControlButtonsEnabled(False)
+
+    def setup_vision(self):
+        """Put the LiDAR setup code here."""
+        if self.vision_process is None:
+            with open("/home/pi/catkin_ws/src/rplidar_ros/launch/rplidar.launch", "w") as f:
+                f.write(f"""<launch>
+  <node name="rplidarNode"          pkg="rplidar_ros"  type="rplidarNode" output="screen">
+  <param name="serial_port"         type="string" value="/dev/serial/by-id/{self.controlPanel.auditoryDropdown.currentText()}"/>
+  <param name="serial_baudrate"     type="int"    value="115200"/><!--A1/A2 -->
+  <!--param name="serial_baudrate"     type="int"    value="256000"--><!--A3 -->
+  <param name="frame_id"            type="string" value="laser"/>
+  <param name="inverted"            type="bool"   value="false"/>
+  <param name="angle_compensate"    type="bool"   value="true"/>
+  </node>
+</launch>""")
+            self.vision_process = subprocess.Popen(("roslaunch", "rplidar_ros", "rplidar.launch"))
+            self.controlPanel.visionButton.setText("Disconnect")
+        else:
+            self.vision_process.terminate()
+            self.vision_process = None
+            self.controlPanel.visionButton.setText("Connect")
+        # if self.video_capture is None:
+        #     self.video_capture = cv.VideoCapture(0)
+        #     self.video_capture.set(cv.CAP_PROP_FRAME_WIDTH, WIDTH)
+        #     self.video_capture.set(cv.CAP_PROP_FRAME_HEIGHT, HEIGHT)
+        #     if not self.video_capture.isOpened():
+        #         raise Exception("Cannot open camera.")
 
     def setup_auditory(self):
         if self.auditory_process is None:
@@ -359,16 +387,6 @@ class Robot(Thread):
             for info in infos:
                 return_value.add(info["azimuth"])
         return return_value
-
-    def setup_vision(self):
-        """Put the LiDAR setup code here."""
-        raise NotImplemented  # TODO
-        # if self.video_capture is None:
-        #     self.video_capture = cv.VideoCapture(0)
-        #     self.video_capture.set(cv.CAP_PROP_FRAME_WIDTH, WIDTH)
-        #     self.video_capture.set(cv.CAP_PROP_FRAME_HEIGHT, HEIGHT)
-        #     if not self.video_capture.isOpened():
-        #         raise Exception("Cannot open camera.")
 
     def exec(self):
         self.mainWindow.show()
