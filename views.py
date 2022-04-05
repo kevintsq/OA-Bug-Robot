@@ -4,12 +4,35 @@ import sys
 
 from PyQt5.QtChart import QValueAxis, QSplineSeries, QChart, QChartView, QPolarChart, QScatterSeries
 from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QProgressBar, QDoubleSpinBox, QPushButton, \
-    QComboBox
+    QComboBox, QSizePolicy
 from PyQt5.QtGui import QPainter, QImage, QPixmap, QIcon
 from PyQt5.QtCore import Qt
 
 PI2 = math.pi * 2
 TAG_IDS = ["8B", "AC", "C3", "D2"]
+
+
+class SmallControl(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.leftButton = QPushButton(self)
+        self.leftButton.setText("Left")
+        self.leftButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.rightButton = QPushButton(self)
+        self.rightButton.setText("Right")
+        self.rightButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.frontButton = QPushButton(self)
+        self.frontButton.setText("Front")
+        self.frontButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.backButton = QPushButton(self)
+        self.backButton.setText("Back")
+        self.backButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        layout = QGridLayout()
+        layout.addWidget(self.leftButton, 1, 0, 2, 2)
+        layout.addWidget(self.rightButton, 1, 4, 2, 2)
+        layout.addWidget(self.frontButton, 0, 2, 2, 2)
+        layout.addWidget(self.backButton, 2, 2, 2, 2)
+        self.setLayout(layout)
 
 
 class ControlPanel(QWidget):
@@ -60,6 +83,7 @@ class ControlPanel(QWidget):
         self.goButton = QPushButton("Go", self)
         self.stopButton = QPushButton("Stop", self)
         self.startButton = QPushButton("Start the Algorithm", self)
+        self.smallControl = SmallControl(self)
 
         layout = QGridLayout()
         # row, column, rowspan, columnspan
@@ -86,13 +110,29 @@ class ControlPanel(QWidget):
         layout.addWidget(self.batteryRemaining, 7, 1, 1, 2)
 
         layout.addWidget(xSpeedLabel, 8, 0)
-        layout.addWidget(self.xSpeedSpinBox, 8, 1, 1, 2)
+        layout.addWidget(self.xSpeedSpinBox, 8, 1)
         layout.addWidget(zSpeedLabel, 9, 0)
-        layout.addWidget(self.zSpeedSpinBox, 9, 1, 1, 2)
-        layout.addWidget(self.goButton, 10, 0, 1, 2)
-        layout.addWidget(self.stopButton, 10, 2)
-        layout.addWidget(self.startButton, 11, 0, 1, 3)
+        layout.addWidget(self.zSpeedSpinBox, 9, 1)
+        layout.addWidget(self.goButton, 10, 0)
+        layout.addWidget(self.stopButton, 10, 1)
+        layout.addWidget(self.startButton, 11, 0, 1, 2)
+        layout.addWidget(self.smallControl, 8, 2, 4, 1)
         self.setLayout(layout)
+
+    def setConnectionButtonsEnabled(self, enabled):
+        self.controllerButton.setEnabled(enabled)
+        self.auditoryButton.setEnabled(enabled)
+        self.olfactoryButton.setEnabled(enabled)
+        self.motionButton.setEnabled(enabled)
+
+    def setControlButtonsEnabled(self, enabled):
+        self.goButton.setEnabled(enabled)
+        self.stopButton.setEnabled(enabled)
+        self.startButton.setEnabled(enabled)
+        self.smallControl.frontButton.setEnabled(enabled)
+        self.smallControl.backButton.setEnabled(enabled)
+        self.smallControl.leftButton.setEnabled(enabled)
+        self.smallControl.rightButton.setEnabled(enabled)
 
 
 class ChartView(QChartView):

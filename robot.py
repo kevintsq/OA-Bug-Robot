@@ -74,10 +74,9 @@ class Robot(Thread):
     def __init__(self, enable_vision=False, *args, **kwargs):
         super().__init__(daemon=True, *args, **kwargs)
 
+        serial_devices = ['../../serial0']
         if os.path.exists('/dev/serial/by-id'):
-            serial_devices = os.listdir('/dev/serial/by-id')
-        else:
-            serial_devices = []
+            serial_devices += os.listdir('/dev/serial/by-id')
 
         QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
         QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
@@ -87,11 +86,9 @@ class Robot(Thread):
         self.mainWindow = views.MainWindow()
         self.controlPanel = self.mainWindow.controlPanel
 
+        self.controlPanel.setControlButtonsEnabled(False)
         if len(serial_devices) == 0:
-            self.controlPanel.controllerButton.setEnabled(False)
-            self.controlPanel.auditoryButton.setEnabled(False)
-            self.controlPanel.olfactoryButton.setEnabled(False)
-            self.controlPanel.motionButton.setEnabled(False)
+            self.controlPanel.setConnectionButtonsEnabled(False)
 
         self.controlPanel.controllerDropdown.addItems(serial_devices)
         self.controlPanel.auditoryDropdown.addItems(serial_devices)
@@ -105,6 +102,12 @@ class Robot(Thread):
 
         self.controlPanel.goButton.clicked.connect(self.on_go_button_clicked)
         self.controlPanel.stopButton.clicked.connect(self.on_stop_button_clicked)
+        self.controlPanel.startButton.clicked.connect(self.on_start_button_clicked)
+        smallControl = self.controlPanel.smallControl
+        smallControl.frontButton.pressed.connect(self.on_front_button_pressed)
+        smallControl.backButton.pressed.connect(self.on_back_button_pressed)
+        smallControl.leftButton.pressed.connect(self.on_left_button_pressed)
+        smallControl.rightButton.pressed.connect(self.on_right_button_pressed)
 
         self.stop_event = Event()
         self.timer = QTimer()
@@ -172,6 +175,18 @@ class Robot(Thread):
         self.controlPanel.batteryTemperature.setText(f"{temperature:.2f} ℃")
         self.controlPanel.batteryRemaining.setValue(remaining)
 
+    def on_front_button_pressed(self):
+        self.go_front(abs(self.controlPanel.xSpeedSpinBox.value()))
+
+    def on_back_button_pressed(self):
+        self.go_back(abs(self.controlPanel.xSpeedSpinBox.value()))
+
+    def on_left_button_pressed(self):
+        self.turn_left(abs(self.controlPanel.zSpeedSpinBox.value()))
+
+    def on_right_button_pressed(self):
+        self.turn_right(abs(self.controlPanel.zSpeedSpinBox.value()))
+
     def on_go_button_clicked(self):
         self.set_speed(self.controlPanel.xSpeedSpinBox.value(),
                        self.controlPanel.zSpeedSpinBox.value())
@@ -180,12 +195,14 @@ class Robot(Thread):
         self.stop()
         self.stop_event.set()
         self.controlPanel.startButton.setText("Start the Algorithm")
-        self.controlPanel.setEnabled(True)
+        self.controlPanel.startButton.setEnabled(True)
+        self.controlPanel.setConnectionButtonsEnabled(True)
 
     def on_start_button_clicked(self):
         self.stop_event.clear()
         self.controlPanel.startButton.setText("Algorithm Started. Press Stop to Stop...")
-        self.controlPanel.setEnabled(False)
+        self.controlPanel.startButton.setEnabled(False)
+        self.controlPanel.setConnectionButtonsEnabled(False)
         self.start()
 
     def setup_controller(self):
@@ -193,11 +210,13 @@ class Robot(Thread):
             self.controller = Shared(Serial(f"/dev/serial/by-id/{self.controlPanel.controllerDropdown.currentText()}", 230400))
             self.controlPanel.controllerButton.setText("Disconnect")
             self.timer.start(1000)
+            self.controlPanel.setControlButtonsEnabled(True)
         else:
             self.timer.stop()
             self.controller.get().close()
             self.controller = None
             self.controlPanel.controllerButton.setText("Connect")
+            self.controlPanel.setControlButtonsEnabled(False)
 
     def setup_auditory(self):
         if self.auditory_process is None:
