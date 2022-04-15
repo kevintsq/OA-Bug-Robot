@@ -74,8 +74,6 @@ class Olfactory(Thread):
                     print("Bad format.", file=sys.stderr)
                     continue
                 self.robot.olfactory_info.update(result)
-                if self.robot.debug_type == Debug.OTHER and result["timeStamp"] % 50 == 0:
-                    self.robot.mainWindow.updateCharts(result)
 
 
 class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -112,32 +110,29 @@ class ThreadingTCPRequestHandler(socketserver.BaseRequestHandler):
                     continue
                 if result["type"] == "auditory":
                     robot.auditory_info.update(result)
-                    if robot.debug_type == Debug.OTHER:
-                        robot.mainWindow.updateSoundSphere(result)
                 elif result["type"] == "olfactory":
                     robot.olfactory_info.update(result)
-                    if robot.debug_type == Debug.OTHER and result["timeStamp"] % 50 == 0:
-                        robot.mainWindow.updateCharts(result)
                 elif result["type"] == "motion":
                     robot.motion_info.update(result)
-                    if robot.debug_type == Debug.OTHER:
-                        robot.mainWindow.updateCompass(result)
                 else:
                     print("Bad format.", file=sys.stderr)
                     return
 
 
 class Shared:
-    def __init__(self, initial=None, needs_update=False):
-        self.__shared = initial
+    def __init__(self, initial=None, needs_update=False, on_update=None):
+        self.shared = initial
         self.lock = Condition()
         self.needs_update = needs_update
+        self.on_update = on_update
         self.updated = False
         self.finished = False
 
     def update(self, info):
         with self.lock:
-            self.__shared = info
+            self.shared = info
+            if self.on_update:
+                self.on_update(info)
             self.updated = True
             self.lock.notify()
 
@@ -148,7 +143,7 @@ class Shared:
             if self.needs_update:
                 self.lock.wait_for(self.is_updated)
             self.updated = False
-            return self.__shared
+            return self.shared
 
     def is_updated(self):
         return self.updated

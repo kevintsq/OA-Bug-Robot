@@ -116,9 +116,9 @@ class Robot(Thread):
         self.timer.timeout.connect(self.update_battery_info)  # must use QTimes to avoid QProgressBar segfault
 
         # these infos must be created before the server is ready
-        self.auditory_info = Shared()
-        self.olfactory_info = Shared()
-        self.motion_info = Shared()
+        self.auditory_info = Shared(on_update=self.update_auditory_info)
+        self.olfactory_info = Shared(on_update=self.update_olfactory_info)
+        self.motion_info = Shared(on_update=self.update_motion_info)
 
         self.server = ThreadingTCPServer(self, (HOST, PORT), ThreadingTCPRequestHandler)
         self.server.allow_reuse_address = True
@@ -154,7 +154,8 @@ class Robot(Thread):
         print("Cleaning up...")
         if self.controller:
             self.stop()
-            self.controller.get().close()
+            with self.controller.lock:
+                self.controller.shared.close()
         # GPIO.cleanup()
         if self.vision_process:
             self.vision_process.terminate()
@@ -175,6 +176,23 @@ class Robot(Thread):
         self.controlPanel.batteryCurrent.setText(f"{current:.2f} A")
         self.controlPanel.batteryTemperature.setText(f"{temperature:.2f} ℃")
         self.controlPanel.batteryRemaining.setValue(remaining)
+
+    def update_auditory_info(self, info):
+        tagId = info["tagId"]
+        timeStamp = info["timeStamp"]
+        if timeStamp % 10 == 0:
+            self.mainWindow.soundDirectionView.updatePoints(tagId, info["azimuth"])
+        if timeStamp % 20 == 0:
+            timeStamp //= 20
+            self.mainWindow.distanceView.update(timeStamp, tagId, info["distance"])
+            self.mainWindow.elevationView.update(timeStamp, tagId, info["elevation"])
+
+    def update_olfactory_info(self, info):
+        timeStamp = info["timeStamp"] // 50
+        self.mainWindow.ethanolChartView.update(timeStamp, "value", info["value"])
+
+    def update_motion_info(self, info):
+        self.mainWindow.compassView.updateCompass(info)
 
     def on_front_button_pressed(self):
         self.go_front(abs(self.controlPanel.xSpeedSpinBox.value()))
@@ -222,7 +240,8 @@ class Robot(Thread):
             self.controlPanel.setControlButtonsEnabled(True)
         else:
             self.timer.stop()
-            self.controller.get().close()
+            with self.controller.lock:
+                self.controller.shared.close()
             self.controller = None
             self.controlPanel.controllerButton.setText("Connect")
             self.controlPanel.setControlButtonsEnabled(False)
@@ -313,21 +332,24 @@ class Robot(Thread):
 
     def set_speed(self, x, z):
         cmd = Robot.SPEED_CONTROL_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x0D, 0x01, x, 0, z)
-        self.controller.get().write(cmd)
-        self.controller.get().read_all()
+        with self.controller.lock:
+            self.controller.shared.write(cmd)
+            self.controller.shared.read_all()
 
     def get_speed(self):
         """:returns x_speed, y_speed, z_speed"""
         cmd = Robot.INFO_CMD_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x01, 0x02)
-        self.controller.get().write(cmd)
-        result = self.controller.get().read(17)
+        with self.controller.lock:
+            self.controller.shared.write(cmd)
+            result = self.controller.shared.read(17)
         return Robot.SPEED_INFO_STRUCT.unpack(result[4:-1])
 
     def get_battery_info(self):
         """:returns voltage, current, temperature, remaining"""
         cmd = Robot.INFO_CMD_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x01, 0x03)
-        self.controller.get().write(cmd)
-        result = self.controller.get().read(12)
+        with self.controller.lock:
+            self.controller.shared.write(cmd)
+            result = self.controller.shared.read(12)
         voltage, current, temperature, remaining = Robot.BATTERY_INFO_STRUCT.unpack(result[4:-1])
         return voltage / 100, current / 100, temperature / 10, remaining
 

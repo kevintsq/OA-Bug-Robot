@@ -1,4 +1,3 @@
-import json
 import math
 import sys
 
@@ -289,87 +288,8 @@ class MainWindow(QWidget):
         layout.addWidget(self.elevationView, 1, 2)
         self.setLayout(layout)
 
-    def updateCharts(self, data):
-        timeStamp = data["timeStamp"] // 50
-        self.ethanolChartView.update(timeStamp, "value", data["value"])
-        # self.h2ChartView.series.append(timeStamp, data["H2"])
-        # self.tVocCharView.series.append(timeStamp, data["tVOC"])
-        # self.co2ChartView.series.append(timeStamp, data["CO2"])
-
-    def updateSoundSphere(self, data):
-        tagId = data["tagId"]
-        timeStamp = data["timeStamp"]
-        if timeStamp % 10 == 0:
-            self.soundDirectionView.updatePoints(tagId, data["azimuth"])
-        if timeStamp % 20 == 0:
-            timeStamp //= 20
-            self.distanceView.update(timeStamp, tagId, data["distance"])
-            self.elevationView.update(timeStamp, tagId, data["elevation"])
-
     # def updateImage(self, data):
     #     self.cameraView.updateImage(data)
-
-    def updateCompass(self, data):
-        self.compassView.updateCompass(data)
-
-
-def test():
-    IPC_TYPE = "SOCKET"
-
-    if IPC_TYPE == "SOCKET":
-        import socket
-
-        HOST = ''
-        PORT = 8080
-        TRUNK_SIZE = 1024
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind((HOST, PORT))
-            s.listen(1)
-            connection, address = s.accept()
-            with connection:
-                print(f'Connected by {address}.')
-                buffer = b''
-                while True:
-                    while b'\r' not in buffer:
-                        data = connection.recv(TRUNK_SIZE)
-                        if not data:
-                            print(f"Connection closed from {address}.")
-                            sys.exit(0)
-                        buffer += data
-                    data_list = buffer.split(b'\r')
-                    # print(data_list)
-                    last_one = data_list[-1]
-                    if last_one == b'\n' or last_one == b'':
-                        buffer = b''
-                    else:
-                        buffer = last_one
-                    if len(data_list) > 1:
-                        try:
-                            result = json.loads(data_list[-2])
-                        except:
-                            print("Bad format.", file=sys.stderr)
-                            continue
-                        if result["type"] == "auditory":
-                            mainWindow.updateSoundSphere(result)
-                        elif result["type"] == "olfactory":
-                            if result["timeStamp"] % 50 == 0:
-                                print(result)
-                                mainWindow.updateCharts(result)
-                        elif result["type"] == "motion":
-                            mainWindow.updateCompass(result)
-                        else:
-                            print("Bad format.", file=sys.stderr)
-    elif IPC_TYPE == "PIPE":
-        import subprocess
-
-        with subprocess.Popen("./client", stdout=subprocess.PIPE, text=True) as p:
-            while True:
-                data = p.stdout.readline()
-                if not data:
-                    print("Connection closed.")
-                    break
-                print(data, end='')
 
 
 if __name__ == "__main__":
@@ -388,6 +308,4 @@ if __name__ == "__main__":
         sys.exit(app.exec())
 
 
-    test_thread = Thread(target=test, args=(), daemon=True)
-    test_thread.start()
     run()
