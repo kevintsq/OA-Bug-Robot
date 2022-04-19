@@ -112,8 +112,10 @@ class Robot(Thread):
         smallControl.rightButton.pressed.connect(self.on_right_button_pressed)
 
         self.stop_event = Event()
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_battery_info)  # must use QTimes to avoid QProgressBar segfault
+        self.battery_timer = QTimer()
+        self.battery_timer.timeout.connect(self.update_battery_info)  # must use QTimes to avoid QProgressBar segfault
+        self.olfactory_timer = QTimer()
+        self.olfactory_timer.timeout.connect(self.update_olfactory_info)
 
         # these infos must be created before the server is ready
         self.auditory_info = Shared(on_update=self.update_auditory_info)
@@ -130,7 +132,7 @@ class Robot(Thread):
         self.controller = None
         self.vision_process = None
         self.auditory_process = None
-        self.olfactory_thread = None
+        self.olfactory_device = None
         self.motion_process = None
 
         # self.saw_img = None
@@ -187,9 +189,10 @@ class Robot(Thread):
             self.mainWindow.distanceView.update(timeStamp, tagId, info["distance"])
             self.mainWindow.elevationView.update(timeStamp, tagId, info["elevation"])
 
-    def update_olfactory_info(self, info):
-        timeStamp = info["timeStamp"] // 50
-        self.mainWindow.ethanolChartView.update(timeStamp, "value", info["value"])
+    def update_olfactory_info(self):
+        self.olfactory_device.write(" ")
+        info = self.olfactory_device.read_all()
+        self.mainWindow.ethanolChartView.update(info["timeStamp"], "value", info["value"])
 
     def update_motion_info(self, info):
         self.mainWindow.compassView.updateCompass(info)
@@ -236,10 +239,10 @@ class Robot(Thread):
         if self.controller is None:
             self.controller = Shared(Serial(f"/dev/serial/by-id/{self.controlPanel.controllerDropdown.currentText()}", 230400))
             self.controlPanel.controllerButton.setText("Disconnect")
-            self.timer.start(1000)
+            self.battery_timer.start(1000)
             self.controlPanel.setControlButtonsEnabled(True)
         else:
-            self.timer.stop()
+            self.battery_timer.stop()
             with self.controller.lock:
                 self.controller.shared.close()
             self.controller = None
@@ -286,14 +289,12 @@ class Robot(Thread):
             self.controlPanel.auditoryButton.setText("Connect")
 
     def setup_olfactory(self):
-        if self.olfactory_thread is None:
-            self.olfactory_thread = Olfactory(f"/dev/serial/by-id/{self.controlPanel.olfactoryDropdown.currentText()}", self)
-            self.olfactory_thread.start()
-            print(f"Gas sensor client loop running in thread {self.olfactory_thread.name}...")
+        if self.olfactory_device is None:
+            self.olfactory_device = Serial(f"/dev/serial/by-id/{self.controlPanel.olfactoryDropdown.currentText()}", 115200)
             self.controlPanel.olfactoryButton.setText("Disconnect")
         else:
-            self.olfactory_thread.stop()
-            self.olfactory_thread = None  # also releases serial
+            self.olfactory_device.close()
+            self.olfactory_device = None  # also releases serial
             self.controlPanel.olfactoryButton.setText("Connect")
 
     def setup_motion(self):
