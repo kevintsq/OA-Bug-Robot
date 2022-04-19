@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from sqlite3 import Timestamp
 from time import sleep
 # import math
 import os
@@ -118,6 +119,7 @@ class Robot(Thread):
         self.olfactory_timer.timeout.connect(self.update_olfactory_info)
 
         # these infos must be created before the server is ready
+        self.auditory_tags = {k: 0 for k in views.TAG_IDS}
         self.auditory_info = Shared(on_update=self.update_auditory_info)
         # self.olfactory_info = Shared(on_update=self.update_olfactory_info)
         self.motion_info = Shared(on_update=self.update_motion_info)
@@ -181,13 +183,15 @@ class Robot(Thread):
 
     def update_auditory_info(self, info):
         tagId = info["tagId"]
-        timeStamp = info["timeStamp"]
+        timeStamp = self.auditory_tags[tagId]
         if timeStamp % 10 == 0:
             self.mainWindow.soundDirectionView.updatePoints(tagId, info["azimuth"])
-        if timeStamp % 20 == 0:
-            timeStamp //= 20
+        if timeStamp % 30 == 0:
+            print(info)
+            timeStamp //= 30
             self.mainWindow.distanceView.update(timeStamp, tagId, info["distance"])
             self.mainWindow.elevationView.update(timeStamp, tagId, info["elevation"])
+        self.auditory_tags[tagId] += 1
 
     def get_olfactory_info(self):
         with self.olfactory_device.lock:
