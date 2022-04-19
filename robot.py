@@ -119,7 +119,7 @@ class Robot(Thread):
 
         # these infos must be created before the server is ready
         self.auditory_info = Shared(on_update=self.update_auditory_info)
-        self.olfactory_info = Shared(on_update=self.update_olfactory_info)
+        # self.olfactory_info = Shared(on_update=self.update_olfactory_info)
         self.motion_info = Shared(on_update=self.update_motion_info)
 
         self.server = ThreadingTCPServer(self, (HOST, PORT), ThreadingTCPRequestHandler)
@@ -157,7 +157,7 @@ class Robot(Thread):
         if self.controller:
             self.stop()
             with self.controller.lock:
-                self.controller.shared.close()
+                self.controller.instance.close()
         # GPIO.cleanup()
         if self.vision_process:
             self.vision_process.terminate()
@@ -189,9 +189,13 @@ class Robot(Thread):
             self.mainWindow.distanceView.update(timeStamp, tagId, info["distance"])
             self.mainWindow.elevationView.update(timeStamp, tagId, info["elevation"])
 
+    def get_olfactory_info(self):
+        with self.olfactory_device.lock:
+            self.olfactory_device.instance.write(" ")
+            return json.loads(self.olfactory_device.instance.read_all())
+
     def update_olfactory_info(self):
-        self.olfactory_device.write(" ")
-        info = self.olfactory_device.read_all()
+        info = self.get_olfactory_info()
         self.mainWindow.ethanolChartView.update(info["timeStamp"], "value", info["value"])
 
     def update_motion_info(self, info):
@@ -244,7 +248,7 @@ class Robot(Thread):
         else:
             self.battery_timer.stop()
             with self.controller.lock:
-                self.controller.shared.close()
+                self.controller.instance.close()
             self.controller = None
             self.controlPanel.controllerButton.setText("Connect")
             self.controlPanel.setControlButtonsEnabled(False)
@@ -290,10 +294,13 @@ class Robot(Thread):
 
     def setup_olfactory(self):
         if self.olfactory_device is None:
-            self.olfactory_device = Serial(f"/dev/serial/by-id/{self.controlPanel.olfactoryDropdown.currentText()}", 115200)
+            self.olfactory_device = Shared(Serial(f"/dev/serial/by-id/{self.controlPanel.olfactoryDropdown.currentText()}", 115200))
+            self.olfactory_timer.start(1000)
             self.controlPanel.olfactoryButton.setText("Disconnect")
         else:
-            self.olfactory_device.close()
+            self.olfactory_timer.stop()
+            with self.olfactory_device.lock:
+                self.olfactory_device.instance.close()
             self.olfactory_device = None  # also releases serial
             self.controlPanel.olfactoryButton.setText("Connect")
 
@@ -334,23 +341,23 @@ class Robot(Thread):
     def set_speed(self, x, z):
         cmd = Robot.SPEED_CONTROL_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x0D, 0x01, x, 0, z)
         with self.controller.lock:
-            self.controller.shared.write(cmd)
-            self.controller.shared.read_all()
+            self.controller.instance.write(cmd)
+            self.controller.instance.read_all()
 
     def get_speed(self):
         """:returns x_speed, y_speed, z_speed"""
         cmd = Robot.INFO_CMD_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x01, 0x02)
         with self.controller.lock:
-            self.controller.shared.write(cmd)
-            result = self.controller.shared.read(17)
+            self.controller.instance.write(cmd)
+            result = self.controller.instance.read(17)
         return Robot.SPEED_INFO_STRUCT.unpack(result[4:-1])
 
     def get_battery_info(self):
         """:returns voltage, current, temperature, remaining"""
         cmd = Robot.INFO_CMD_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x01, 0x03)
         with self.controller.lock:
-            self.controller.shared.write(cmd)
-            result = self.controller.shared.read(12)
+            self.controller.instance.write(cmd)
+            result = self.controller.instance.read(12)
         voltage, current, temperature, remaining = Robot.BATTERY_INFO_STRUCT.unpack(result[4:-1])
         return voltage / 100, current / 100, temperature / 10, remaining
 
@@ -390,7 +397,7 @@ class Robot(Thread):
         return self.turning_point
 
     def is_revisiting_places(self):
-        return self.olfactory_info.get()["value"] > 400  # TODO
+        return self.get_olfactory_info()["value"] > 400  # TODO
 
     def is_leaving_gathering_circle(self):
         raise NotImplemented  # TODO
