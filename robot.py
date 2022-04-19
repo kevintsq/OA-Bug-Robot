@@ -191,7 +191,7 @@ class Robot(Thread):
 
     def get_olfactory_info(self):
         with self.olfactory_device.lock:
-            self.olfactory_device.instance.write(" ")
+            self.olfactory_device.instance.write(b" ")
             return json.loads(self.olfactory_device.instance.read_all())
 
     def update_olfactory_info(self):
