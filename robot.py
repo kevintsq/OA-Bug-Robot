@@ -193,7 +193,7 @@ class Robot(Thread):
         with self.olfactory_device.lock:
             self.olfactory_device.instance.write(b" ")
             result = self.olfactory_device.instance.read_all()
-            while result != b"":
+            while result == b"":
                 self.olfactory_device.instance.write(b" ")
                 result = self.olfactory_device.instance.read_all()
             return json.loads(result)
