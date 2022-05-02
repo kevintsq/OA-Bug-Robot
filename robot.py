@@ -133,9 +133,9 @@ class Robot(Thread):
 
         # these infos must be created before the server is ready
         self.auditory_tags = {k: 0 for k in views.TAG_IDS}
-        self.auditory_info = Shared(on_update=self.update_auditory_info)
+        self.auditory_info = Shared(on_update=self.update_auditory_info, needs_update=True)
         # self.olfactory_info = Shared(on_update=self.update_olfactory_info)
-        self.motion_info = Shared(on_update=self.update_motion_info)
+        self.motion_info = Shared(on_update=self.update_motion_info, needs_update=True)
 
         self.server = ThreadingTCPServer(self, (HOST, PORT), ThreadingTCPRequestHandler)
         self.server.allow_reuse_address = True
@@ -146,6 +146,7 @@ class Robot(Thread):
 
         self.controller = None
         self.vision_process = None
+        self.subscriber = None
         self.auditory_process = None
         self.olfactory_device = None
         self.motion_process = None
@@ -383,26 +384,29 @@ class Robot(Thread):
                 self.collide_turn_function = self.turn_right
             else:
                 self.collide_turn_function = self.turn_left
-        Kp = 40
+        Kp = 0.025
         goal = normalize_azimuth(int(self.motion_info.get()["azimuth"]["yaw"]) + deg)
         while True:
-            current = int(self.motion_info.get()["azimuth"]["yaw"])
+            # self.stop()
+            # eval(input())
+            data = self.motion_info.get()
+            current = int(data["azimuth"]["yaw"])
             yaw_err = normalize_azimuth(goal - current)
 
-            print(f"goal: {goal},\tcurrent: {current},\tyaw_err: {yaw_err}")
+            print(f"timeStamp: {data['timeStamp']},\tgoal: {goal},\tcurrent: {current},\tyaw_err: {yaw_err}")
             if abs(yaw_err) < 2:
                 self.stop()
                 return
 
-            yaw_rate = Kp * abs(yaw_err) // 10
+            yaw_rate = Kp * abs(yaw_err)
             # 限幅，一个最大的角速度，一个最小的可以转动的
-            yaw_rate = yaw_rate if yaw_rate < 40 else 40
-            yaw_rate = yaw_rate if yaw_rate > 20 else 20
-
+            yaw_rate = yaw_rate if yaw_rate < 0.2 else 0.2
+            yaw_rate = yaw_rate if yaw_rate > 0.5 else 0.5
+            print(yaw_rate)
             if yaw_err > 0:
-                self.turn_left(abs(yaw_rate) / 80)
+                self.turn_left(abs(yaw_rate))
             else:
-                self.turn_right(abs(yaw_rate) / 80)
+                self.turn_right(abs(yaw_rate))
 
     def set_speed(self, x, z):
         cmd = Robot.SPEED_CONTROL_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x0D, 0x01, x, 0, z)
