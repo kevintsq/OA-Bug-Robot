@@ -3,7 +3,7 @@ import sys
 
 from PyQt5.QtChart import QValueAxis, QSplineSeries, QChart, QChartView, QPolarChart, QScatterSeries
 from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QProgressBar, QDoubleSpinBox, QPushButton, \
-    QComboBox, QSizePolicy
+    QComboBox, QSizePolicy, QLineEdit
 from PyQt5.QtGui import QPainter, QImage, QPixmap, QIcon
 from PyQt5.QtCore import Qt
 
@@ -94,6 +94,9 @@ class ControlPanel(QWidget):
         self.startButton = QPushButton("Start the Algorithm", self)
         self.smallControl = SmallControl(self)
 
+        self.cmd_box = QLineEdit(self)
+        self.exec_button = QPushButton("Execute", self)
+
         layout = QGridLayout()
         # row, column, rowspan, columnspan
         layout.addWidget(controllerLabel, 0, 0)
@@ -129,6 +132,8 @@ class ControlPanel(QWidget):
         layout.addWidget(self.stopButton, 11, 1)
         layout.addWidget(self.startButton, 12, 0, 1, 2)
         layout.addWidget(self.smallControl, 9, 2, 4, 1)
+        layout.addWidget(self.cmd_box, 13, 0, 1, 2)
+        layout.addWidget(self.exec_button, 13, 2)
         self.setLayout(layout)
 
     def setConnectionButtonsEnabled(self, enabled):
