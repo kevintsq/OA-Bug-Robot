@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from sqlite3 import Timestamp
 from time import sleep
-# import math
+import math
 import os
 import subprocess
 
 # import numpy as np
 # import cv2 as cv
+import rospy
+from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Twist
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
@@ -139,6 +141,9 @@ class Robot(Thread):
 
         # self.saw_img = None
         # self.contours = None
+        self.distance = {'d0': 0, 'd5': 0, 'd40': 0, 'd90': 0, 'd180': 0, 'd270': 0, 'd320': 0}
+        self.dis90 = []
+        self.dis270 = []
         self.turning_point = False
 
         self.just_started_state = self.JustStartedState(self)
@@ -274,6 +279,8 @@ class Robot(Thread):
 </launch>""")
             self.vision_process = subprocess.Popen(("roslaunch", "rplidar_ros", "rplidar.launch"))
             self.controlPanel.visionButton.setText("Disconnect")
+            rospy.Subscriber('/scan', LaserScan, self.on_scan)
+            rospy.spin()
         else:
             self.vision_process.terminate()
             self.vision_process = None
@@ -284,6 +291,74 @@ class Robot(Thread):
         #     self.video_capture.set(cv.CAP_PROP_FRAME_HEIGHT, HEIGHT)
         #     if not self.video_capture.isOpened():
         #         raise Exception("Cannot open camera.")
+
+    def calculate_scan(self, data):
+        juge_angle = int(5 / (360 / 1147))
+        front_angle = int(0 / (360 / 1147))
+        left_front_angle = int(40 / (360 / 1147))
+        left_angle = int(90 / (360 / 1147))
+        back_angle = int(180 / (360 / 1147))
+        right_angle = int(270 / (360 / 1147))
+        right_front_angle = int(320 / (360 / 1147))
+        scan_filter = []
+        for i in data.ranges:
+            if math.isinf(i) == True:
+                i = 100
+                scan_filter.append(i)
+            else:
+                scan_filter.append(i)
+        self.distance['d0'] = scan_filter[front_angle]
+        self.distance['d5'] = scan_filter[juge_angle]
+        self.distance['d40'] = scan_filter[left_front_angle]
+        self.distance['d90'] = scan_filter[left_angle]
+        self.distance['d180'] = scan_filter[back_angle]
+        self.distance['d270'] = scan_filter[right_angle]
+        self.distance['d320'] = scan_filter[right_front_angle]
+        self.dis90.append(self.distance['d90'])
+        self.dis270.append(self.distance['d270'])
+        rospy.loginfo(self.dis90)
+
+    def on_scan(self, data):
+        forward = False
+        turn_left = False
+        turn_right = False
+        self.calculate_scan(data)
+        #  首先判断墙外角
+        dif90 = self.dis90[-1] - self.dis90[-2]
+        dif270 = self.dis270[-1] - self.dis270[-2]
+        # if dif90 > 1:
+        #     orbit = -1
+        #     turn_left = True
+
+        if self.distance['d0'] > 0.5:
+
+            if self.distance['d40'] > 0.5 and self.distance['d320'] > 0.5:
+                orbit = 0
+                forward = True
+            elif self.distance['d40'] > 0.5 and self.distance['d320'] < 0.5:
+                turn_left = True
+
+            elif self.distance['d40'] < 0.5 and self.distance['d320'] > 0.5:
+                orbit = 1
+                turn_right = True
+
+            else:
+                orbit = 0
+                forward = True
+        elif self.distance['d0'] < 0.5:
+            if self.distance['d270'] > self.distance['d90']:
+                orbit = 1
+                turn_right = True
+            else:
+                orbit = -1
+                turn_left = True
+
+        if turn_left:
+            self.turn_left(self.controlPanel.zSpeedSpinBox.value())
+        elif turn_right:
+            self.turn_right(self.controlPanel.zSpeedSpinBox.value())
+        elif forward:
+            self.go_front(self.controlPanel.xSpeedSpinBox.value())
 
     def setup_auditory(self):
         if self.auditory_process is None:
