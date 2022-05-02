@@ -266,7 +266,7 @@ class Robot(Thread):
     def setup_vision(self):
         """Put the LiDAR setup code here."""
         if self.vision_process is None:
-            with open("/home/pi/catkin_ws/src/rplidar_ros/launch/rplidar.launch", "w") as f:
+            with open("/home/pi/catkin_ws/src/rplidar_ros-master/launch/rplidar.launch", "w") as f:
                 f.write(f"""<launch>
   <node name="rplidarNode"          pkg="rplidar_ros"  type="rplidarNode" output="screen">
   <param name="serial_port"         type="string" value="/dev/serial/by-id/{self.controlPanel.visionDropdown.currentText()}"/>
@@ -279,6 +279,7 @@ class Robot(Thread):
 </launch>""")
             self.vision_process = subprocess.Popen(("roslaunch", "rplidar_ros", "rplidar.launch"))
             self.controlPanel.visionButton.setText("Disconnect")
+            rospy.init_node('turtlebot_scan')
             rospy.Subscriber('/scan', LaserScan, self.on_scan)
             rospy.spin()
         else:
@@ -512,11 +513,8 @@ class Robot(Thread):
 
     def run(self):
         """Main Loop for the robot's control logic. Put your code below `while True:`."""
-        raise NotImplemented  # TODO
-        self.setup_vision()
-
-        while True:
-            self.state.transfer_to_next_state()
+        # while True:
+        #     self.state.transfer_to_next_state()
 
 
 if __name__ == '__main__':
