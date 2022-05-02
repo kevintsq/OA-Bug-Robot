@@ -280,8 +280,6 @@ class Robot(Thread):
             self.vision_process = subprocess.Popen(("roslaunch", "rplidar_ros", "rplidar.launch"))
             self.controlPanel.visionButton.setText("Disconnect")
             rospy.init_node('turtlebot_scan')
-            rospy.Subscriber('/scan', LaserScan, self.on_scan)
-            rospy.spin()
         else:
             self.vision_process.terminate()
             self.vision_process = None
@@ -325,8 +323,8 @@ class Robot(Thread):
         turn_right = False
         self.calculate_scan(data)
         #  首先判断墙外角
-        dif90 = self.dis90[-1] - self.dis90[-2]
-        dif270 = self.dis270[-1] - self.dis270[-2]
+        # dif90 = self.dis90[-1] - self.dis90[-2]
+        # dif270 = self.dis270[-1] - self.dis270[-2]
         # if dif90 > 1:
         #     orbit = -1
         #     turn_left = True
@@ -513,8 +511,9 @@ class Robot(Thread):
 
     def run(self):
         """Main Loop for the robot's control logic. Put your code below `while True:`."""
-        # while True:
-        #     self.state.transfer_to_next_state()
+        while True:
+            rospy.Subscriber('/scan', LaserScan, self.on_scan)
+            # self.state.transfer_to_next_state()
 
 
 if __name__ == '__main__':
