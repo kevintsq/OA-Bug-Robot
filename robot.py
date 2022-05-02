@@ -315,7 +315,7 @@ class Robot(Thread):
         self.distance['d320'] = scan_filter[right_front_angle]
         self.dis90.append(self.distance['d90'])
         self.dis270.append(self.distance['d270'])
-        rospy.loginfo(self.dis90)
+        # rospy.loginfo(self.dis90)
 
     def on_scan(self, data):
         forward = False
