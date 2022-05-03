@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+import traceback
 from time import sleep
 import math
 import os
@@ -12,7 +12,7 @@ import rospy
 from sensor_msgs.msg import LaserScan
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMessageBox
 
 from state import *
 from utils import *
@@ -62,7 +62,11 @@ class Robot(Thread):
 
         def transfer_when_colliding_wall(self):
             robot: Robot = self.get_robot()
-            robot.collide_turn_function()  # TODO: 重写PID
+            if robot.collide_turn_function == robot.turn_left:
+                robot.turn_degree(90)
+            else:
+                robot.turn_degree(-90)
+            # TODO: 方法不唯一
 
         def transfer_when_not_following_wall(self):
             robot: Robot = self.get_robot()
@@ -261,7 +265,7 @@ class Robot(Thread):
 
     def on_start_button_clicked(self):
         self.stop_event.clear()
-        self.controlPanel.startButton.setText("Algorithm Started. Press Stop to Stop...")
+        # self.controlPanel.startButton.setText("Algorithm Started. Press Stop to Stop...")
         self.controlPanel.startButton.setEnabled(False)
         self.controlPanel.setConnectionButtonsEnabled(False)
         self.subscriber = rospy.Subscriber('/scan', LaserScan, self.on_scan)
@@ -271,8 +275,7 @@ class Robot(Thread):
         try:
             eval(self.controlPanel.cmd_box.text())
         except:
-            self.controlPanel.cmd_box.setText("Error")
-            print(sys.exc_info())
+            QMessageBox.critical(self.controlPanel.cmd_box, "Error", traceback.format_exc())
 
     def setup_controller(self):
         if self.controller is None:
@@ -340,6 +343,7 @@ class Robot(Thread):
         self.dis90.append(self.distance['d90'])
         self.dis270.append(self.distance['d270'])
 
+        self.controlPanel.startButton.setText(f"{self.state}")
         self.state.transfer_to_next_state()
 
     def setup_auditory(self):
