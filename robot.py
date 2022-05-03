@@ -40,6 +40,7 @@ class Robot(Thread):
     INFO_CMD_STRUCT = Frame(">BBBB")
     SPEED_CONTROL_STRUCT = Frame(">BBBBfff")
     SPEED_INFO_STRUCT = Frame(">fff")
+    MOTION_INFO_STRUCT = Frame(">fffffffff")
     BATTERY_INFO_STRUCT = Frame(">HHHB")
 
     class JustStartedState(AbstractState):
@@ -161,6 +162,7 @@ class Robot(Thread):
         server_thread.start()
         print(f"Server loop running in thread: {server_thread.name}...")
 
+        rospy.init_node('turtlebot_scan')
         self.controller = None
         self.vision_process = None
         self.subscriber = None
@@ -321,7 +323,6 @@ class Robot(Thread):
 </launch>""")
             self.vision_process = subprocess.Popen(("roslaunch", "rplidar_ros", "rplidar.launch"))
             self.controlPanel.visionButton.setText("Disconnect")
-            rospy.init_node('turtlebot_scan')
         else:
             self.vision_process.terminate()
             self.vision_process = None
@@ -379,6 +380,10 @@ class Robot(Thread):
                 self.go_front_left()
             else:
                 self.go_front()
+
+    def test(self):
+        while True:
+            print(f"{self.get_motion()[1] * 180 / math.pi}")
 
     def debug(self):
         for k, v in self.distance.items():
@@ -481,6 +486,13 @@ class Robot(Thread):
             self.controller.instance.write(cmd)
             result = self.controller.instance.read(17)
         return Robot.SPEED_INFO_STRUCT.unpack(result[4:-1])
+
+    def get_motion(self):
+        cmd = Robot.INFO_CMD_STRUCT.pack_with_chksum(0xFE, 0xEF, 0x01, 0x04)
+        with self.controller.lock:
+            self.controller.instance.write(cmd)
+            result = self.controller.instance.read(41)
+        return Robot.MOTION_INFO_STRUCT.unpack(result[4:-1])
 
     def get_battery_info(self):
         """:returns voltage, current, temperature, remaining"""
