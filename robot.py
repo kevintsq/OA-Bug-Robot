@@ -22,6 +22,7 @@ import views
 HOST = "127.0.0.1"
 PORT = 8080
 JUDGE_ANGLE = int(5 / (360 / 1147))
+JUDGE_ANGLE_2 = int(355 / (360 / 1147))
 FRONT_ANGLE = int(0 / (360 / 1147))
 LEFT_FRONT_ANGLE = int(40 / (360 / 1147))
 LEFT_ANGLE = int(90 / (360 / 1147))
@@ -157,7 +158,7 @@ class Robot(Thread):
 
         # self.saw_img = None
         # self.contours = None
-        self.distance = {'d0': 0, 'd5': 0, 'd40': 0, 'd90': 0, 'd180': 0, 'd270': 0, 'd320': 0}
+        self.distance = {'d0': 0, 'd5': 0, 'd40': 0, 'd90': 0, 'd180': 0, 'd270': 0, 'd320': 0, 'd355': 0}
         self.dis90 = []
         self.dis270 = []
         self.turning_point = False
@@ -340,11 +341,13 @@ class Robot(Thread):
         self.distance['d180'] = scan_filter[BACK_ANGLE]
         self.distance['d270'] = scan_filter[RIGHT_ANGLE]
         self.distance['d320'] = scan_filter[RIGHT_FRONT_ANGLE]
+        self.distance['d355'] = scan_filter[JUDGE_ANGLE_2]
         self.dis90.append(self.distance['d90'])
         self.dis270.append(self.distance['d270'])
 
-        self.controlPanel.startButton.setText(f"{self.state}")
-        self.state.transfer_to_next_state()
+        print(self.distance['d5'] - self.distance['d355'])
+        # self.controlPanel.startButton.setText(f"{self.state}")
+        # self.state.transfer_to_next_state()
 
     def setup_auditory(self):
         if self.auditory_process is None:
@@ -476,6 +479,9 @@ class Robot(Thread):
 
     def is_colliding_wall(self):
         return self.distance['d0'] < 0.5
+
+    def is_colliding_front_wall(self):
+        return self.distance['d5'] - self.distance['d355'] < 0.05
 
     def is_colliding_another_robot(self):
         return False  # TODO
