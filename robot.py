@@ -43,8 +43,9 @@ class Robot(Thread):
 
         def transfer_when_colliding_wall(self):
             robot: Robot = self.get_robot()
-            action = robot.get_action_from_contour()
-            if action == robot.turn_left:
+            if robot.is_colliding_front_wall():
+                robot.turn_degree(90)  # TODO
+            elif robot.is_colliding_left_wall():
                 robot.turn_degree(robot.get_left_wall_angle(), True)  # TODO
             else:
                 robot.turn_degree(robot.get_right_wall_angle(), True)  # TODO
@@ -345,9 +346,9 @@ class Robot(Thread):
         self.dis90.append(self.distance['d90'])
         self.dis270.append(self.distance['d270'])
 
-        print(self.distance['d5'] - self.distance['d355'])
-        # self.controlPanel.startButton.setText(f"{self.state}")
-        # self.state.transfer_to_next_state()
+        # print(self.distance['d5'] - self.distance['d355'])
+        self.controlPanel.startButton.setText(f"{self.state}")
+        self.state.transfer_to_next_state()
 
     def setup_auditory(self):
         if self.auditory_process is None:
@@ -483,9 +484,14 @@ class Robot(Thread):
     def is_colliding_front_wall(self):
         return self.distance['d5'] - self.distance['d355'] < 0.05
 
+    def is_colliding_left_wall(self):
+        return self.distance['d270'] < self.distance['d90']  # TODO: 如果在墙角可能会死锁
+
+    def is_colliding_right_wall(self):
+        return self.distance['d270'] > self.distance['d90']  # TODO: 如果在墙角可能会死锁
+
     def is_colliding_another_robot(self):
         return False  # TODO
-        # return self.is_colliding_left() or self.is_colliding_right()
 
     def is_visiting_turning_point(self):
         if self.collide_turn_function is None:
@@ -508,12 +514,6 @@ class Robot(Thread):
     def is_found_injuries(self):
         raise NotImplemented  # TODO
 
-    def is_colliding_left(self):
-        return self.distance['d270'] < self.distance['d90']  # TODO: 如果在墙角可能会死锁
-
-    def is_colliding_right(self):
-        return self.distance['d270'] > self.distance['d90']  # TODO: 如果在墙角可能会死锁
-
     def get_right_wall_angle(self):
         """右侧墙壁相对于行进方向的角度（正）"""
         a = math.pi - math.atan2(self.distance['d270'], self.distance['d180'])
@@ -523,12 +523,6 @@ class Robot(Thread):
         """左侧墙壁相对于行进方向的角度（正）"""
         b = math.atan2(self.distance['d90'], self.distance['d0'])
         return b / math.pi * 180
-
-    def get_action_from_contour(self):
-        if self.is_colliding_right():
-            return self.turn_right
-        else:
-            return self.turn_left
 
     def get_azimuths_from_sound(self):
         self.stop()
