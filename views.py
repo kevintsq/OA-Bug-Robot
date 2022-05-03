@@ -95,6 +95,7 @@ class ControlPanel(QWidget):
         self.smallControl = SmallControl(self)
 
         self.cmd_box = QLineEdit(self)
+        self.cmd_box.setPlaceholderText("Enter valid Python expression to run")
         self.exec_button = QPushButton("Execute", self)
 
         layout = QGridLayout()
