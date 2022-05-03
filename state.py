@@ -30,7 +30,7 @@ class AbstractState:
         self.__robot.state = self.__robot.just_started_state
 
     def transfer_when_not_following_wall(self):
-        pass
+        print(f"[{self.__robot}] is not following wall! Turning!")
 
     def transfer_when_revisiting_places(self):
         self.__robot.print(f"[{self.__robot}] Finds this place has already been visited!")

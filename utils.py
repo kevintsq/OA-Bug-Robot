@@ -11,6 +11,12 @@ from serial import Serial
 BLUE = (255, 0, 0)
 GREEN = (0, 255, 0)
 RED = (0, 0, 255)
+RESOLUTION = 360 / 1147
+
+
+def scan_index(azimuth):
+    """0 <= azimuth < 360"""
+    return int(azimuth / RESOLUTION)
 
 
 def normalize_azimuth(azimuth):

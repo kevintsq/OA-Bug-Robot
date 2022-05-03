@@ -21,14 +21,19 @@ import views
 
 HOST = "127.0.0.1"
 PORT = 8080
-JUDGE_ANGLE = int(5 / (360 / 1147))
-JUDGE_ANGLE_2 = int(355 / (360 / 1147))
-FRONT_ANGLE = int(0 / (360 / 1147))
-LEFT_FRONT_ANGLE = int(40 / (360 / 1147))
-LEFT_ANGLE = int(90 / (360 / 1147))
-BACK_ANGLE = int(180 / (360 / 1147))
-RIGHT_ANGLE = int(270 / (360 / 1147))
-RIGHT_FRONT_ANGLE = int(320 / (360 / 1147))
+FRONT = scan_index(0)
+JUDGE_5 = scan_index(5)
+LEFT_FRONT_ANGLE = 40
+LEFT_FRONT = scan_index(LEFT_FRONT_ANGLE)
+LEFT = scan_index(90)
+BACK = scan_index(180)
+RIGHT = scan_index(270)
+RIGHT_FRONT = scan_index(360 - LEFT_FRONT_ANGLE)
+JUDGE_355 = scan_index(355)
+ANGLES = (FRONT, JUDGE_5, LEFT_FRONT, LEFT, BACK, RIGHT, RIGHT_FRONT, JUDGE_355)
+
+WALL_UPPER_THRESH = 0.5 / math.sin(LEFT_FRONT_ANGLE)
+WALL_LOWER_THRESH = 0.3 / math.sin(LEFT_FRONT_ANGLE)
 
 
 class Robot(Thread):
@@ -42,16 +47,21 @@ class Robot(Thread):
             super().__init__(robot)
 
         def transfer_when_colliding_wall(self):
+            super().transfer_when_colliding_wall()
             robot: Robot = self.get_robot()
             if robot.is_colliding_front_wall():
-                robot.turn_degree(90)  # TODO
+                print("Colliding front!")
+                robot.turn_degree(-90, True)  # TODO
             elif robot.is_colliding_left_wall():
+                print("Colliding left!")
                 robot.turn_degree(robot.get_left_wall_angle(), True)  # TODO
             else:
+                print("Colliding right!")
                 robot.turn_degree(robot.get_right_wall_angle(), True)  # TODO
             robot.state = robot.following_wall_state
 
         def transfer_when_not_following_wall(self):
+            super().transfer_when_not_following_wall()
             robot: Robot = self.get_robot()
             azimuth = robot.get_azimuths_from_sound().pop()
             current = robot.motion_info.get()["azimuth"]["yaw"]
@@ -63,14 +73,13 @@ class Robot(Thread):
             super().__init__(robot)
 
         def transfer_when_colliding_wall(self):
+            super().transfer_when_colliding_wall()
             robot: Robot = self.get_robot()
-            if robot.collide_turn_function == robot.turn_left:
-                robot.turn_degree(90)
-            else:
-                robot.turn_degree(-90)
+            robot.collide_turn_function()
             # TODO: 方法不唯一
 
         def transfer_when_not_following_wall(self):
+            super().transfer_when_not_following_wall()
             robot: Robot = self.get_robot()
             if robot.is_revisiting_places():
                 self.transfer_when_revisiting_places()
@@ -87,6 +96,8 @@ class Robot(Thread):
                 self.transfer_when_colliding_another_robot()
             elif robot.is_visiting_turning_point():  # Needs Turning
                 self.transfer_when_not_following_wall()
+            elif robot.is_colliding_wall():
+                self.transfer_when_colliding_wall()
             else:
                 robot.go_following_wall()
 
@@ -159,9 +170,9 @@ class Robot(Thread):
 
         # self.saw_img = None
         # self.contours = None
-        self.distance = {'d0': 0, 'd5': 0, 'd40': 0, 'd90': 0, 'd180': 0, 'd270': 0, 'd320': 0, 'd355': 0}
-        self.dis90 = []
-        self.dis270 = []
+        self.distance = {k: 0 for k in ANGLES}
+        self.left_front_angles = []
+        self.right_front_angles = []
         self.turning_point = False
         self.collide_turn_function = None
 
@@ -261,6 +272,7 @@ class Robot(Thread):
             self.subscriber.unregister()
         self.stop()
         self.stop_event.set()
+        self.state = self.just_started_state
         self.controlPanel.startButton.setText("Start the Algorithm")
         self.controlPanel.startButton.setEnabled(True)
         self.controlPanel.setConnectionButtonsEnabled(True)
@@ -270,7 +282,7 @@ class Robot(Thread):
         # self.controlPanel.startButton.setText("Algorithm Started. Press Stop to Stop...")
         self.controlPanel.startButton.setEnabled(False)
         self.controlPanel.setConnectionButtonsEnabled(False)
-        self.subscriber = rospy.Subscriber('/scan', LaserScan, self.on_scan)
+        self.subscriber = rospy.Subscriber('/scan', LaserScan, self.on_scan, queue_size=1)
         # self.start()
 
     def on_exec_button_clicked(self):
@@ -322,32 +334,72 @@ class Robot(Thread):
         #         raise Exception("Cannot open camera.")
 
     def go_following_wall(self):
-        if self.distance['d40'] > 0.5 and self.distance['d320'] < 0.5:
-            self.turn_left()
-        elif self.distance['d40'] < 0.5 and self.distance['d320'] > 0.5:
-            self.turn_right()
+        assert self.collide_turn_function is not None
+        self.debug()
+        if self.collide_turn_function == self.turn_left:
+            # print("self.collide_turn_function == self.turn_left")
+            # right = self.ranges[get_scan_index_from_azimuth(225):get_scan_index_from_azimuth(315)]
+            # min_dist = min(self.ranges[get_scan_index_from_azimuth(225):get_scan_index_from_azimuth(315)])
+            # min_index = len(right) + right.index(min_dist)
+            # if min_dist < 0.3:
+            #     if get_scan_index_from_azimuth(225) <= min_index <= get_scan_index_from_azimuth(270):
+            #         self.turn_right()
+            #     else:
+            #         self.turn_left()
+            # elif min_dist > 0.5:
+            #     self.turn_right()
+            # else:
+            #     self.go_front()
+            
+            # if self.distance[RIGHT_FRONT] > WALL_UPPER_THRESH:
+            #     self.turn_right()
+            # elif self.distance[RIGHT_FRONT] < WALL_LOWER_THRESH:
+            #     self.turn_left()
+            # else:
+            #     self.go_front()
+            
+            if self.distance[RIGHT] > 0.4:
+                self.go_front_right()
+            elif self.distance[RIGHT] < 0.3:
+                self.go_front_left()
+            else:
+                self.go_front()
         else:
-            self.go_front()
+            # print("self.collide_turn_function == self.turn_right")
+            # if self.distance[LEFT_FRONT] > WALL_UPPER_THRESH:
+            #     self.turn_left()
+            # elif self.distance[LEFT_FRONT] < WALL_LOWER_THRESH:
+            #     self.turn_right()
+            # else:
+            #     self.go_front()
+            
+            if self.distance[LEFT] > 0.4:
+                self.go_front_right()
+            elif self.distance[LEFT] < 0.3:
+                self.go_front_left()
+            else:
+                self.go_front()
+
+    def debug(self):
+        for k, v in self.distance.items():
+            print(f"{k}: {v:.2f}", end=', ')
+        print()
 
     def on_scan(self, data):
-        scan_filter = []
-        for i in data.ranges:
-            if math.isinf(i):
-                i = 100
-            scan_filter.append(i)
-        self.distance['d0'] = scan_filter[FRONT_ANGLE]
-        self.distance['d5'] = scan_filter[JUDGE_ANGLE]
-        self.distance['d40'] = scan_filter[LEFT_FRONT_ANGLE]
-        self.distance['d90'] = scan_filter[LEFT_ANGLE]
-        self.distance['d180'] = scan_filter[BACK_ANGLE]
-        self.distance['d270'] = scan_filter[RIGHT_ANGLE]
-        self.distance['d320'] = scan_filter[RIGHT_FRONT_ANGLE]
-        self.distance['d355'] = scan_filter[JUDGE_ANGLE_2]
-        self.dis90.append(self.distance['d90'])
-        self.dis270.append(self.distance['d270'])
+        self.ranges = data.ranges
+        isinf = math.isinf
+        for i in ANGLES:
+            if not isinf(self.ranges[i]):
+                self.distance[i] = self.ranges[i]
+        self.left_front_angles.append(self.distance[LEFT_FRONT])
+        self.right_front_angles.append(self.distance[RIGHT_FRONT])
 
-        # print(self.distance['d5'] - self.distance['d355'])
+        self.debug()
+        print(f"Front: {self.distance[JUDGE_5] - self.distance[JUDGE_355]}")
+        print(f"Left: {self.get_left_wall_angle()}")
+        print(f"right: {self.get_right_wall_angle()}")
         self.controlPanel.startButton.setText(f"{self.state}")
+        print(self.state)
         self.state.transfer_to_next_state()
 
     def setup_auditory(self):
@@ -401,7 +453,7 @@ class Robot(Thread):
             current = int(data["azimuth"]["yaw"])
             yaw_err = normalize_azimuth(goal - current)
 
-            print(f"timeStamp: {data['timeStamp']},\tgoal: {goal},\tcurrent: {current},\tyaw_err: {yaw_err}")
+            # print(f"timeStamp: {data['timeStamp']},\tgoal: {goal},\tcurrent: {current},\tyaw_err: {yaw_err}")
             if abs(yaw_err) < 2:
                 self.stop()
                 return
@@ -410,7 +462,7 @@ class Robot(Thread):
             # 限幅，一个最大的角速度，一个最小的可以转动的
             yaw_rate = yaw_rate if yaw_rate < 0.2 else 0.2
             yaw_rate = yaw_rate if yaw_rate > 0.5 else 0.5
-            print(yaw_rate)
+            # print(yaw_rate)
             if yaw_err > 0:
                 self.turn_left(abs(yaw_rate))
             else:
@@ -459,36 +511,48 @@ class Robot(Thread):
             speed = self.controlPanel.zSpeedSpinBox.value()
         self.set_speed(0, -speed)
 
+    def go_front_left(self, x_speed=None, z_speed=None):
+        if x_speed is None:
+            x_speed = self.controlPanel.xSpeedSpinBox.value()
+        if z_speed is None:
+            z_speed = self.controlPanel.zSpeedSpinBox.value()
+        self.set_speed(-x_speed, z_speed)
+
+    def go_front_right(self, x_speed=None, z_speed=None):
+        if x_speed is None:
+            x_speed = self.controlPanel.xSpeedSpinBox.value()
+        if z_speed is None:
+            z_speed = self.controlPanel.zSpeedSpinBox.value()
+        self.set_speed(-x_speed, -z_speed)
+
     def stop(self):
         self.set_speed(0, 0)
 
     def turn_according_to_wall(self):
         """"""
         assert self.collide_turn_function is not None
+        self.go_front()
+        sleep(0.5 / self.controlPanel.xSpeedSpinBox.value())
         if self.collide_turn_function == self.turn_left:
-            self.go_front()
-            sleep(1)
             self.turn_degree(-90)
-            self.go_front()
-            sleep(1)
+            # self.go_front()
+            # sleep(1)
         else:
-            self.go_front()
-            sleep(1)
             self.turn_degree(90)
-            self.go_front()
-            sleep(1)
+            # self.go_front()
+            # sleep(1)
 
     def is_colliding_wall(self):
-        return self.distance['d0'] < 0.5
+        return self.distance[FRONT] < 0.5
 
     def is_colliding_front_wall(self):
-        return self.distance['d5'] - self.distance['d355'] < 0.05
+        return self.distance[JUDGE_5] - self.distance[JUDGE_355] < 0.025
 
     def is_colliding_left_wall(self):
-        return self.distance['d270'] < self.distance['d90']  # TODO: 如果在墙角可能会死锁
+        return self.distance[JUDGE_5] < self.distance[JUDGE_355]  # TODO: 如果在墙角可能会死锁
 
     def is_colliding_right_wall(self):
-        return self.distance['d270'] > self.distance['d90']  # TODO: 如果在墙角可能会死锁
+        return self.distance[JUDGE_5] > self.distance[JUDGE_355]  # TODO: 如果在墙角可能会死锁
 
     def is_colliding_another_robot(self):
         return False  # TODO
@@ -497,9 +561,9 @@ class Robot(Thread):
         if self.collide_turn_function is None:
             return False
         elif self.collide_turn_function == self.turn_left:
-            return self.dis90[-1] - self.dis90[-2] > 1
+            return self.right_front_angles[-1] - self.right_front_angles[-2] > 1
         else:
-            return self.dis270[-1] - self.dis270[-2] > 1
+            return self.left_front_angles[-1] - self.left_front_angles[-2] > 1
 
     def is_revisiting_places(self):
         return False  # TODO
@@ -516,15 +580,16 @@ class Robot(Thread):
 
     def get_right_wall_angle(self):
         """右侧墙壁相对于行进方向的角度（正）"""
-        a = math.pi - math.atan2(self.distance['d270'], self.distance['d180'])
-        return -a / math.pi * 180
+        a = math.atan2(self.distance[RIGHT], self.distance[BACK])
+        return a / math.pi * 180
 
     def get_left_wall_angle(self):
         """左侧墙壁相对于行进方向的角度（正）"""
-        b = math.atan2(self.distance['d90'], self.distance['d0'])
+        b = math.atan2(self.distance[LEFT], self.distance[FRONT])
         return b / math.pi * 180
 
     def get_azimuths_from_sound(self):
+        """left positive right negative TODO: not finished"""
         self.stop()
         return_value = set()
         while len(return_value) == 0:
