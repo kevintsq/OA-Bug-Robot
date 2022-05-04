@@ -2,23 +2,24 @@
 # -*- coding: utf-8 -*-
 from robot import *
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 
 
 class RobotUsingRos(Robot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.publisher = None
+        self.controlloer_publisher = None
     
     def __exit__(self, *args):
         print("Cleaning up...")
         if self.controller:
             self.stop()
             self.controller.terminate()
-        if self.publisher:
-            self.publisher.unregister()
+        if self.controlloer_publisher:
+            self.controlloer_publisher.unregister()
         # GPIO.cleanup()
-        if self.subscriber:
-            self.subscriber.unregister()
+        if self.vision_subscriber:
+            self.vision_subscriber.unregister()
         if self.vision_process:
             self.vision_process.terminate()
             # self.video_capture.release()
@@ -37,10 +38,12 @@ class RobotUsingRos(Robot):
             self.controller = subprocess.Popen(("roslaunch", "lingao_bringup", "bringup.launch"))
             self.controlPanel.controllerButton.setText("Disconnect")
             self.controlPanel.setControlButtonsEnabled(True)
-            self.publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+            self.controlloer_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         else:
             self.controller.terminate()
             self.controller = None
+            self.controlloer_publisher.unregister()
+            self.controlloer_publisher = None
             self.controlPanel.controllerButton.setText("Connect")
             self.controlPanel.setControlButtonsEnabled(False)
 
@@ -48,7 +51,7 @@ class RobotUsingRos(Robot):
         vel_msg = Twist()
         vel_msg.linear.x = x
         vel_msg.angular.z = z
-        self.publisher.publish(vel_msg)
+        self.controlloer_publisher.publish(vel_msg)
 
 
 if __name__ == '__main__':

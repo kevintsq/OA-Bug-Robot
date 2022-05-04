@@ -252,14 +252,13 @@ class CompassView(QChartView):
         self.setChart(self.chart)
         self.pointsCount = 0
 
-    def updateCompass(self, data):
+    def updateCompass(self, yaw):
         self.points.clear()
         # mag = data["magneticIntensity"]
         # yaw = -math.atan2(mag["y"], mag["x"])
         # if yaw < 0:
         #     yaw += PI2
         # self.points.append(yaw / PI2, 0.75)
-        yaw = data["azimuth"]["yaw"]
         if yaw < 0:
             yaw += 360
         self.points.append(yaw / 360, 0.75)

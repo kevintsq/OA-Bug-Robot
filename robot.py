@@ -65,7 +65,7 @@ class Robot(Thread):
             super().transfer_when_not_following_wall()
             robot: Robot = self.get_robot()
             azimuth = robot.get_azimuths_from_sound().pop()
-            current = robot.motion_info.get()["azimuth"]["yaw"]
+            current = int(robot.get_yaw(robot.motion_info.get()))
             robot.turn_degree(normalize_azimuth(azimuth - current))
             robot.collide_turn_function = None
 
@@ -165,7 +165,7 @@ class Robot(Thread):
         rospy.init_node('turtlebot_scan')
         self.controller = None
         self.vision_process = None
-        self.subscriber = None
+        self.vision_subscriber = None
         self.auditory_process = None
         self.olfactory_device = None
         self.motion_process = None
@@ -198,8 +198,8 @@ class Robot(Thread):
             with self.controller.lock:
                 self.controller.instance.close()
         # GPIO.cleanup()
-        if self.subscriber:
-            self.subscriber.unregister()
+        if self.vision_subscriber:
+            self.vision_subscriber.unregister()
         if self.vision_process:
             self.vision_process.terminate()
             # self.video_capture.release()
@@ -243,7 +243,7 @@ class Robot(Thread):
         self.mainWindow.ethanolChartView.update(info["timeStamp"], "value", info["value"])
 
     def update_motion_info(self, info):
-        self.mainWindow.compassView.updateCompass(info)
+        self.mainWindow.compassView.updateCompass(self.get_yaw(info))
 
     def on_front_button_pressed(self):
         self.go_front(abs(self.controlPanel.xSpeedSpinBox.value()))
@@ -270,8 +270,8 @@ class Robot(Thread):
                        self.controlPanel.zSpeedSpinBox.value())
 
     def on_stop_button_clicked(self):
-        if self.subscriber:
-            self.subscriber.unregister()
+        if self.vision_subscriber:
+            self.vision_subscriber.unregister()
         self.stop()
         self.stop_event.set()
         self.state = self.just_started_state
@@ -284,7 +284,7 @@ class Robot(Thread):
         # self.controlPanel.startButton.setText("Algorithm Started. Press Stop to Stop...")
         self.controlPanel.startButton.setEnabled(False)
         self.controlPanel.setConnectionButtonsEnabled(False)
-        self.subscriber = rospy.Subscriber('/scan', LaserScan, self.on_scan, queue_size=1)
+        self.vision_subscriber = rospy.Subscriber('/scan', LaserScan, self.on_scan, queue_size=1)
         # self.start()
 
     def on_exec_button_clicked(self):
@@ -359,9 +359,9 @@ class Robot(Thread):
             # else:
             #     self.go_front()
             
-            if self.distance[RIGHT] > 0.4:
+            if self.distance[RIGHT_FRONT] > 0.4:
                 self.go_front_right()
-            elif self.distance[RIGHT] < 0.3:
+            elif self.distance[RIGHT_FRONT] < 0.3:
                 self.go_front_left()
             else:
                 self.go_front()
@@ -374,12 +374,17 @@ class Robot(Thread):
             # else:
             #     self.go_front()
             
-            if self.distance[LEFT] > 0.4:
+            if self.distance[LEFT_FRONT] > 0.4:
                 self.go_front_right()
-            elif self.distance[LEFT] < 0.3:
+            elif self.distance[LEFT_FRONT] < 0.3:
                 self.go_front_left()
             else:
                 self.go_front()
+    
+    def dump(self):
+        with open("dump.txt", "a+") as f:
+            f.write(str(self.ranges))
+            f.write("\n")
 
     def test(self):
         while True:
@@ -392,20 +397,21 @@ class Robot(Thread):
 
     def on_scan(self, data):
         self.ranges = data.ranges
-        isinf = math.isinf
-        for i in ANGLES:
-            if not isinf(self.ranges[i]):
-                self.distance[i] = self.ranges[i]
-        self.left_front_angles.append(self.distance[LEFT_FRONT])
-        self.right_front_angles.append(self.distance[RIGHT_FRONT])
+        self.dump()
+        # isinf = math.isinf
+        # for i in ANGLES:
+        #     if not isinf(self.ranges[i]):
+        #         self.distance[i] = self.ranges[i]
+        # self.left_front_angles.append(self.distance[LEFT_FRONT])
+        # self.right_front_angles.append(self.distance[RIGHT_FRONT])
 
-        self.debug()
-        print(f"Front: {self.distance[JUDGE_5] - self.distance[JUDGE_355]}")
-        print(f"Left: {self.get_left_wall_angle()}")
-        print(f"right: {self.get_right_wall_angle()}")
-        self.controlPanel.startButton.setText(f"{self.state}")
-        print(self.state)
-        self.state.transfer_to_next_state()
+        # self.debug()
+        # print(f"Front: {self.distance[JUDGE_5] - self.distance[JUDGE_355]}")
+        # print(f"Left: {self.get_left_wall_angle()}")
+        # print(f"right: {self.get_right_wall_angle()}")
+        # self.controlPanel.startButton.setText(f"{self.state}")
+        # print(self.state)
+        # self.state.transfer_to_next_state()
 
     def setup_auditory(self):
         if self.auditory_process is None:
@@ -442,6 +448,10 @@ class Robot(Thread):
             self.motion_process = None
             self.controlPanel.motionButton.setText("Connect")
 
+    @staticmethod
+    def get_yaw(info) -> float:
+        return info["azimuth"]["yaw"]
+
     def turn_degree(self, deg, update_collide_turn_function=False):
         """degree < 0: right, > 0: left"""
         if update_collide_turn_function:
@@ -450,12 +460,11 @@ class Robot(Thread):
             else:
                 self.collide_turn_function = self.turn_left
         Kp = 0.025
-        goal = normalize_azimuth(int(self.motion_info.get()["azimuth"]["yaw"]) + deg)
+        goal = normalize_azimuth(int(self.get_yaw(self.motion_info.get())) + deg)
         while True:
             # self.stop()
             # eval(input())
-            data = self.motion_info.get()
-            current = int(data["azimuth"]["yaw"])
+            current = int(self.get_yaw(self.motion_info.get()))
             yaw_err = normalize_azimuth(goal - current)
 
             # print(f"timeStamp: {data['timeStamp']},\tgoal: {goal},\tcurrent: {current},\tyaw_err: {yaw_err}")
@@ -543,12 +552,12 @@ class Robot(Thread):
     def turn_according_to_wall(self):
         """"""
         assert self.collide_turn_function is not None
-        self.go_front()
-        sleep(0.5 / self.controlPanel.xSpeedSpinBox.value())
+        # self.go_front()
+        # sleep(0.5 / self.controlPanel.xSpeedSpinBox.value())
         if self.collide_turn_function == self.turn_left:
-            self.turn_degree(-90)
-            # self.go_front()
-            # sleep(1)
+            self.turn_degree(-45)
+            self.go_front()
+            sleep(1)
         else:
             self.turn_degree(90)
             # self.go_front()
@@ -573,7 +582,13 @@ class Robot(Thread):
         if self.collide_turn_function is None:
             return False
         elif self.collide_turn_function == self.turn_left:
-            return self.right_front_angles[-1] - self.right_front_angles[-2] > 1
+            cnt = 0
+            for i in range(225, 315):
+                if self.ranges[scan_index(i)] * math.sin(i) > 0.4:
+                    cnt += 1
+            # return self.right_front_angles[-1] - self.right_front_angles[-2] > 1
+            print(f"cnt = {cnt}")
+            return cnt > 25
         else:
             return self.left_front_angles[-1] - self.left_front_angles[-2] > 1
 
