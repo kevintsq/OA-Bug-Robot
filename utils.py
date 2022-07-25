@@ -29,6 +29,10 @@ def normalize_azimuth(azimuth):
         return azimuth
 
 
+def dist(p1, p2):
+    return ((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2) ** 0.5
+
+
 class Frame(Struct):
     CHKSUM_BYTE = Struct(">B")
 
