@@ -102,7 +102,7 @@ class ThreadingTCPRequestHandler(socketserver.BaseRequestHandler):
                 if not data:
                     print(f"\nConnection closed by {self.client_address}.")
                     robot.auditory_info.finish()
-                    robot.olfactory_info.finish()
+                    # robot.olfactory_info.finish()
                     robot.motion_info.finish()
                     return
                 buffer += data
