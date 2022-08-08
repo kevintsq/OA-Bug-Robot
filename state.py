@@ -33,7 +33,7 @@ class AbstractState:
         print(f"[{self.__robot}] is not following wall! Turning!")
 
     def transfer_when_revisiting_places(self):
-        self.__robot.print(f"[{self.__robot}] Finds this place has already been visited!")
+        print(f"[{self.__robot}] Finds this place has already been visited!")
 
     def __str__(self):
         return self.__class__.__name__

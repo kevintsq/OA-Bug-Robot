@@ -5,7 +5,8 @@ from PyQt5.QtChart import QValueAxis, QSplineSeries, QChart, QChartView, QPolarC
 from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QProgressBar, QDoubleSpinBox, QPushButton, \
     QComboBox, QSizePolicy, QLineEdit
 from PyQt5.QtGui import QPainter, QImage, QPixmap, QIcon
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
+
 
 PI2 = math.pi * 2
 TAG_IDS = ["8B", "AC", "C3", "D2"]
@@ -34,35 +35,46 @@ class SmallControl(QWidget):
         self.setLayout(layout)
 
 
+class AutoUpdatedComboBox(QComboBox):
+    update_signal = pyqtSignal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def showPopup(self):
+        self.update_signal.emit()
+        super().showPopup()
+
+
 class ControlPanel(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         controllerLabel = QLabel("Controller", self)
-        self.controllerDropdown = QComboBox(self)
+        self.controllerDropdown = AutoUpdatedComboBox(self)
         self.controllerButton = QPushButton(self)
         self.controllerButton.setText("Connect")
         self.controllerDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         visionLabel = QLabel("Vision", self)
-        self.visionDropdown = QComboBox(self)
+        self.visionDropdown = AutoUpdatedComboBox(self)
         self.visionButton = QPushButton(self)
         self.visionButton.setText("Connect")
         self.visionDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         auditoryLabel = QLabel("Auditory", self)
-        self.auditoryDropdown = QComboBox(self)
+        self.auditoryDropdown = AutoUpdatedComboBox(self)
         self.auditoryButton = QPushButton(self)
         self.auditoryButton.setText("Connect")
         self.auditoryDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         olfactoryLabel = QLabel("Olfactory", self)
-        self.olfactoryDropdown = QComboBox(self)
+        self.olfactoryDropdown = AutoUpdatedComboBox(self)
         self.olfactoryButton = QPushButton(self)
         self.olfactoryButton.setText("Connect")
         self.olfactoryDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         motionLabel = QLabel("Motion", self)
-        self.motionDropdown = QComboBox(self)
+        self.motionDropdown = AutoUpdatedComboBox(self)
         self.motionButton = QPushButton(self)
         self.motionButton.setText("Connect")
         self.motionDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)

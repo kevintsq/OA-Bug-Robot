@@ -9,6 +9,7 @@ from typing import List
 
 # import numpy as np
 # import cv2 as cv
+import RPi.GPIO as GPIO
 import rospy
 from sensor_msgs.msg import LaserScan
 from laser_line_extraction.msg import LineSegmentList, LineSegment
@@ -23,6 +24,7 @@ import views
 
 HOST = "127.0.0.1"
 PORT = 8080
+PUMP_CTRL_PIN = 17
 # FRONT = scan_index(0)
 # JUDGE_5 = scan_index(5)
 # LEFT_FRONT_ANGLE = 40
@@ -54,20 +56,27 @@ class Robot(Thread):
             super().transfer_when_colliding_wall()
             robot: Robot = self.get_robot()
             if robot.colliding_wall:
-                if robot.colliding_wall.angle < 0:
-                    angle = robot.colliding_wall.angle + 90
-                    robot.turn_degree(angle, True)  # TODO
+                if robot.auditory_process:
+                    azimuth = robot.get_azimuths_from_sound().pop()
+                    if azimuth < 0:  # need to turn left
+                        robot.turn_degree(robot.colliding_wall.angle + 90, True)
+                    else:  # need to turn right
+                        robot.turn_degree(robot.colliding_wall.angle - 90, True)
                 else:
-                    angle = robot.colliding_wall.angle - 90
-                    robot.turn_degree(angle, True)  # TODO
-            robot.state = robot.following_wall_state
+                    if robot.colliding_wall.angle < 0:
+                        angle = robot.colliding_wall.angle + 90
+                        robot.turn_degree(angle, True)  # TODO
+                    else:
+                        angle = robot.colliding_wall.angle - 90
+                        robot.turn_degree(angle, True)  # TODO
+            robot.set_state(robot.following_wall_state)
 
         def transfer_when_not_following_wall(self):
             super().transfer_when_not_following_wall()
             robot: Robot = self.get_robot()
             azimuth = robot.get_azimuths_from_sound().pop()
             current = int(robot.get_yaw(robot.motion_info.get()))
-            robot.turn_degree(normalize_azimuth(azimuth - current))
+            robot.turn_degree(normalize_azimuth(azimuth - current))  # TODO: + 180?
             robot.collide_turn_function = None
 
     class FollowingWallState(AbstractState):
@@ -85,14 +94,17 @@ class Robot(Thread):
         def transfer_when_not_following_wall(self):
             super().transfer_when_not_following_wall()
             robot: Robot = self.get_robot()
-            if robot.is_revisiting_places():
+            if robot.has_revisited_places:
                 self.transfer_when_revisiting_places()
-            robot.turn_according_to_wall()
+            else:
+                robot.turn_according_to_wall()
 
         def transfer_when_revisiting_places(self):
             super().transfer_when_revisiting_places()
             robot: Robot = self.get_robot()
-            robot.state = robot.just_started_state
+            robot.has_revisited_places = False
+            robot.set_state(robot.just_started_state)
+            robot.get_state().transfer_when_not_following_wall()
 
         def transfer_to_next_state(self):
             robot: Robot = self.get_robot()
@@ -109,10 +121,12 @@ class Robot(Thread):
 
     def __init__(self, *args, **kwargs):
         super().__init__(daemon=True, *args, **kwargs)
+        self.tag_id = ""  # TODO
+        self.pump_output = 0
 
-        serial_devices = ['../../serial0']
-        if os.path.exists('/dev/serial/by-id'):
-            serial_devices += os.listdir('/dev/serial/by-id')
+        GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(PUMP_CTRL_PIN, GPIO.OUT)
 
         QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
         QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
@@ -123,20 +137,13 @@ class Robot(Thread):
         self.controlPanel = self.mainWindow.controlPanel
 
         self.controlPanel.setControlButtonsEnabled(False)
-        if len(serial_devices) == 0:
-            self.controlPanel.setConnectionButtonsEnabled(False)
-
-        self.controlPanel.controllerDropdown.addItems(serial_devices)
-        self.controlPanel.visionDropdown.addItems(serial_devices)
-        self.controlPanel.auditoryDropdown.addItems(serial_devices)
-        self.controlPanel.olfactoryDropdown.addItems(serial_devices)
-        self.controlPanel.motionDropdown.addItems(serial_devices)
-        for i, s in enumerate(serial_devices):
-            if s == "usb-1a86_USB_Serial-if00-port0":
-                self.controlPanel.controllerDropdown.setCurrentIndex(i)
-            elif s == "usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0":
-                self.controlPanel.visionDropdown.setCurrentIndex(i)
-
+        self.update_device_list()
+        # self.controlPanel.controllerDropdown.update_signal.connect(self.update_device_list)
+        # self.controlPanel.visionDropdown.update_signal.connect(self.update_device_list)
+        # self.controlPanel.auditoryDropdown.update_signal.connect(self.update_device_list)
+        # self.controlPanel.olfactoryDropdown.update_signal.connect(self.update_device_list)
+        # self.controlPanel.motionDropdown.update_signal.connect(self.update_device_list)
+        
         self.controlPanel.controllerButton.clicked.connect(self.setup_controller)
         self.controlPanel.visionButton.clicked.connect(self.setup_vision)
         self.controlPanel.auditoryButton.clicked.connect(self.setup_auditory)
@@ -162,11 +169,18 @@ class Robot(Thread):
         self.battery_timer.timeout.connect(self.update_battery_info)  # must use QTimes to avoid QProgressBar segfault
         self.olfactory_timer = QTimer()
         self.olfactory_timer.timeout.connect(self.update_olfactory_info)
+        # self.pump_timer = QTimer()
+        # self.pump_timer.timeout.connect(self.control_pump)
+        self.pump_start_event = Event()  # used to start or stop the pump
+        self.pump_stop_event = Event()  # used to stop the pump when exiting the program
+        self.pump_thread = Thread(target=self.control_pump, daemon=True)
+        self.pump_thread.start()
 
         # these infos must be created before the server is ready
         self.auditory_tags = {k: 0 for k in views.TAG_IDS}
         self.auditory_info = Shared(on_update=self.update_auditory_info, needs_update=True)
         # self.olfactory_info = Shared(on_update=self.update_olfactory_info)
+        self.has_revisited_places = False
         self.motion_info = Shared(on_update=self.update_motion_info, needs_update=True)
 
         # self.distance = None
@@ -200,7 +214,7 @@ class Robot(Thread):
 
         self.just_started_state = self.JustStartedState(self)
         self.following_wall_state = self.FollowingWallState(self)
-        self.state = self.just_started_state
+        self.__state = self.just_started_state
 
         self.in_room = False
         self.mission_complete = False
@@ -213,11 +227,14 @@ class Robot(Thread):
 
     def __exit__(self, *args):
         print("Cleaning up...")
+        self.stop_event.set()
+        self.pump_stop_event.set()
+        GPIO.output(PUMP_CTRL_PIN, 0)
+        GPIO.cleanup()
         if self.controller:
             self.stop()
             with self.controller.lock:
                 self.controller.instance.close()
-        # GPIO.cleanup()
         if self.vision_subscriber:
             self.vision_subscriber.unregister()
         if self.wall_subscriber:
@@ -236,7 +253,40 @@ class Robot(Thread):
         print("Done.")
 
     def __str__(self):
-        return f"state={self.state}, collide_turn_func={self.collide_turn_function}"
+        return f"state={self.__state}, collide_turn_func={self.collide_turn_function}"
+
+    def set_state(self, state):
+        self.__state = state
+        self.mainWindow.setWindowTitle(f"{state}")
+
+    def get_state(self):
+        return self.__state
+
+    def update_device_list(self):
+        serial_devices = ['../../serial0']
+        if os.path.exists('/dev/serial/by-id'):
+            serial_devices += os.listdir('/dev/serial/by-id')
+        if len(serial_devices) == 0:
+            self.controlPanel.setConnectionButtonsEnabled(False)
+        # self.controlPanel.controllerDropdown.clear()
+        # self.controlPanel.visionDropdown.clear()
+        # self.controlPanel.auditoryDropdown.clear()
+        # self.controlPanel.olfactoryDropdown.clear()
+        # self.controlPanel.motionDropdown.clear()
+        self.controlPanel.controllerDropdown.addItems(serial_devices)
+        self.controlPanel.visionDropdown.addItems(serial_devices)
+        self.controlPanel.auditoryDropdown.addItems(serial_devices)
+        self.controlPanel.olfactoryDropdown.addItems(serial_devices)
+        self.controlPanel.motionDropdown.addItems(serial_devices)
+        for i, s in enumerate(serial_devices):
+            if s == "usb-1a86_USB_Serial-if00-port0":
+                self.controlPanel.controllerDropdown.setCurrentIndex(i)
+            elif s == "usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0":
+                self.controlPanel.visionDropdown.setCurrentIndex(i)
+            elif s == "usb-Silicon_Labs_J-Link_Pro_OB_000440204772-if00":
+                self.controlPanel.auditoryDropdown.setCurrentIndex(i)
+            elif s == "usb-Seeed_Seeed_XIAO_M0_01EF4D4750555158372E3120FF072114-if00":
+                self.controlPanel.olfactoryDropdown.setCurrentIndex(i)
 
     def update_battery_info(self):
         voltage, current, temperature, remaining = self.get_battery_info()
@@ -251,7 +301,7 @@ class Robot(Thread):
         if timeStamp % 10 == 0:
             self.mainWindow.soundDirectionView.updatePoints(tagId, info["azimuth"])
         if timeStamp % 30 == 0:
-            print(info)
+            # print(info)
             timeStamp //= 30
             self.mainWindow.distanceView.update(timeStamp, tagId, info["distance"])
             self.mainWindow.elevationView.update(timeStamp, tagId, info["elevation"])
@@ -265,10 +315,27 @@ class Robot(Thread):
 
     def update_olfactory_info(self):
         info = self.get_olfactory_info()
-        self.mainWindow.ethanolChartView.update(info["timeStamp"], "value", info["value"])
+        if info["value"] > 100:
+            print(f"Olfactory higher than 100!")
+            self.has_revisited_places = True
+        timestamp = info["timeStamp"]
+        if timestamp % 10 == 0:
+            timestamp //= 10
+            self.mainWindow.ethanolChartView.update(timestamp, "value", info["value"])
 
     def update_motion_info(self, info):
         self.mainWindow.compassView.updateCompass(self.get_yaw(info))
+
+    def control_pump(self):
+        while not self.pump_stop_event.is_set() and self.pump_start_event.wait():
+            GPIO.output(PUMP_CTRL_PIN, 1)
+            if self.pump_stop_event.is_set():
+                return
+            sleep(0.35)
+            GPIO.output(PUMP_CTRL_PIN, 0)
+            if self.pump_stop_event.is_set():
+                return
+            sleep(1)
 
     def on_front_button_pressed(self):
         self.go_front(abs(self.controlPanel.xSpeedSpinBox.value()))
@@ -297,17 +364,34 @@ class Robot(Thread):
     def on_stop_button_clicked(self):
         self.stop()
         self.stop_event.set()
-        self.state = self.just_started_state
+        self.pump_start_event.clear()
+        self.__state = self.just_started_state
+        self.mainWindow.setWindowTitle(f"Robot Studio")
+        self.has_revisited_places = False
+        self.walls = None
+        self.nearest_wall = None
+        self.next_wall = None
+        self.turning_point = False
+        self.collide_turn_function = None
+        self.in_room = False
+        self.mission_complete = False
         self.controlPanel.startButton.setText("Start the Algorithm")
         self.controlPanel.startButton.setEnabled(True)
         self.controlPanel.setConnectionButtonsEnabled(True)
 
     def on_start_button_clicked(self):
-        self.stop_event.clear()
-        # self.controlPanel.startButton.setText("Algorithm Started. Press Stop to Stop...")
-        self.controlPanel.startButton.setEnabled(False)
-        self.controlPanel.setConnectionButtonsEnabled(False)
-        # self.run()
+        if self.stop_event.is_set():
+            self.stop_event.clear()
+            self.mainWindow.setWindowTitle(f"{self.__state}")
+            self.controlPanel.startButton.setText("Algorithm Started. Press Again to Pause")
+            self.controlPanel.setConnectionButtonsEnabled(False)
+            self.pump_start_event.set()
+            # self.start()
+        else:
+            self.stop()
+            self.stop_event.set()
+            self.pump_start_event.clear()
+            self.controlPanel.startButton.setText("Algorithm Paused. Press Again to Continue")
 
     def on_exec_button_clicked(self):
         try:
@@ -417,7 +501,7 @@ class Robot(Thread):
             self.nearest_wall = min(self.walls, key=lambda x: x.radius)
         if not self.stop_event.is_set():
             # print(f"Nearest:\n{self.nearest_wall}")
-            self.state.transfer_to_next_state()
+            self.__state.transfer_to_next_state()
         # print(f"angle: {normalize_azimuth(self.nearest_wall.angle * 180 / math.pi - 180)}")
         # start_x, start_y = self.nearest_wall.start
         # print(f"start: [{start_y}, {-start_x}]")
@@ -439,7 +523,7 @@ class Robot(Thread):
     def setup_olfactory(self):
         if self.olfactory_device is None:
             self.olfactory_device = Shared(Serial(f"/dev/serial/by-id/{self.controlPanel.olfactoryDropdown.currentText()}", 115200))
-            self.olfactory_timer.start(1000)
+            self.olfactory_timer.start(100)
             self.controlPanel.olfactoryButton.setText("Disconnect")
         else:
             self.olfactory_timer.stop()
@@ -576,7 +660,7 @@ class Robot(Thread):
         # sleep(1)
 
     def is_colliding_wall(self):
-        if self.state == self.just_started_state:
+        if self.__state == self.just_started_state:
             for wall in self.walls:
                 if -90 < wall.angle < 90 and wall.radius < WALL_MIN_DISTANCE:
                     self.colliding_wall = wall
@@ -684,9 +768,9 @@ class Robot(Thread):
                                 return i
             return None
         
-    def is_revisiting_places(self):
-        return False  # TODO
-        # return self.get_olfactory_info()["value"] > 400  # TODO
+    # def is_revisiting_places(self):
+    #     # return False  # TODO
+    #     return self.get_olfactory_info()["value"] > 100  # TODO
 
     def is_leaving_gathering_circle(self):
         raise NotImplemented  # TODO
@@ -702,8 +786,8 @@ class Robot(Thread):
         self.stop()
         return_value = set()
         while len(return_value) == 0:
-            infos = self.auditory_info.get()
-            for info in infos:
+            info = self.auditory_info.get()
+            if info["tagId"] != self.tag_id:
                 return_value.add(info["azimuth"])
         return return_value
 
@@ -714,7 +798,7 @@ class Robot(Thread):
     def run(self):
         """Main Loop for the robot's control logic. Put your code below `while True:`."""
         while True:
-            self.state.transfer_to_next_state()
+            self.__state.transfer_to_next_state()
 
 
 if __name__ == '__main__':

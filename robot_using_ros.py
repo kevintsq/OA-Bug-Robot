@@ -12,14 +12,19 @@ class RobotUsingRos(Robot):
     
     def __exit__(self, *args):
         print("Cleaning up...")
+        self.stop_event.set()
+        self.pump_stop_event.set()
+        GPIO.output(PUMP_CTRL_PIN, 0)
+        GPIO.cleanup()
         if self.controller:
             self.stop()
             self.controller.terminate()
         if self.controlloer_publisher:
             self.controlloer_publisher.unregister()
-        # GPIO.cleanup()
         if self.vision_subscriber:
             self.vision_subscriber.unregister()
+        if self.wall_subscriber:
+            self.wall_subscriber.unregister()
         if self.vision_process:
             self.vision_process.terminate()
             # self.video_capture.release()
