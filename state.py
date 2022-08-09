@@ -24,10 +24,10 @@ class AbstractState:
         print(f"[{self.__robot}] Collides wall! Turning!")
 
     def transfer_when_colliding_another_robot(self):
-        self.__robot.go_back()  # TODO
+        # self.__robot.go_back()  # TODO
         print(f"[{self.__robot}] Collides another robot! Turning!")
-        self.__robot.turn_right()  # TODO
-        self.__robot.state = self.__robot.just_started_state
+        # self.__robot.turn_right()  # TODO
+        self.__robot.set_state(self.__robot.just_started_state)
 
     def transfer_when_not_following_wall(self):
         print(f"[{self.__robot}] is not following wall! Turning!")

@@ -13,6 +13,8 @@ import RPi.GPIO as GPIO
 import rospy
 from sensor_msgs.msg import LaserScan
 from laser_line_extraction.msg import LineSegmentList, LineSegment
+from obstacle_detector.msg import Obstacles, CircleObstacle
+
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMessageBox
@@ -52,6 +54,13 @@ class Robot(Thread):
         def __init__(self, robot):
             super().__init__(robot)
 
+        def transfer_when_colliding_another_robot(self):
+            super().transfer_when_colliding_another_robot()
+            # self.__robot.go_back()  # TODO
+            # self.__robot.turn_right()  # TODO
+            robot: Robot = self.get_robot()
+            robot.turn_degree(-90)
+
         def transfer_when_colliding_wall(self):
             super().transfer_when_colliding_wall()
             robot: Robot = self.get_robot()
@@ -90,6 +99,16 @@ class Robot(Thread):
     class FollowingWallState(AbstractState):
         def __init__(self, robot):
             super().__init__(robot)
+
+        def transfer_when_colliding_another_robot(self):
+            super().transfer_when_colliding_another_robot()
+            robot: Robot = self.get_robot()
+            if robot.collide_turn_function == robot.turn_left:
+                robot.turn_degree(90)
+            else:
+                robot.turn_degree(-90)
+            # self.__robot.go_back()  # TODO
+            # self.__robot.turn_right()  # TODO
 
         def transfer_when_colliding_wall(self):
             super().transfer_when_colliding_wall()
@@ -131,6 +150,8 @@ class Robot(Thread):
         super().__init__(daemon=True, *args, **kwargs)
         self.tag_id = ""  # TODO
         self.pump_output = 0
+        self.initial_azimuth = None
+        self.initial_x_speed = 0.5
 
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
@@ -158,7 +179,7 @@ class Robot(Thread):
         self.controlPanel.olfactoryButton.clicked.connect(self.setup_olfactory)
         self.controlPanel.motionButton.clicked.connect(self.setup_motion)
 
-        self.controlPanel.xSpeedSpinBox.setValue(0.5)
+        self.controlPanel.xSpeedSpinBox.setValue(self.initial_x_speed)
         self.controlPanel.zSpeedSpinBox.setValue(0.5)
 
         self.controlPanel.goButton.clicked.connect(self.on_go_button_clicked)
@@ -219,7 +240,6 @@ class Robot(Thread):
         # self.right_front_angles = []
         self.turning_point = False
         self.collide_turn_function = None
-        self.initial_azimuth = None
 
         self.just_started_state = self.JustStartedState(self)
         self.following_wall_state = self.FollowingWallState(self)
@@ -395,6 +415,7 @@ class Robot(Thread):
     def on_start_button_clicked(self):
         if self.stop_event.is_set():
             self.set_initial_azimuth()
+            self.initial_x_speed = self.controlPanel.xSpeedSpinBox.value()
             self.stop_event.clear()
             self.mainWindow.setWindowTitle(f"{self.__state}")
             self.controlPanel.startButton.setText("Algorithm Started. Press Again to Pause")
@@ -441,9 +462,11 @@ class Robot(Thread):
   <param name="angle_compensate"    type="bool"   value="true"/>
   </node>
 </launch>""")
-            self.vision_process = subprocess.Popen(("roslaunch", "laser_line_extraction", "example.launch"))
+            self.vision_process = subprocess.Popen(("roslaunch", "obstacle_detector", "scanner_with_wall.launch"))
+            # self.vision_process = subprocess.Popen(("roslaunch", "laser_line_extraction", "example.launch"))
             # self.vision_subscriber = rospy.Subscriber('/scan', LaserScan, self.on_scan, queue_size=1)
             self.wall_subscriber = rospy.Subscriber('/line_segments', LineSegmentList, self.on_wall, queue_size=1)
+            self.obstacle_subscriber = rospy.Subscriber('/obstacles', Obstacles, self.on_obstacle, queue_size=1)
             self.controlPanel.visionButton.setText("Disconnect")
         else:
             self.vision_process.terminate()
@@ -521,6 +544,32 @@ class Robot(Thread):
         # print(f"start: [{start_y}, {-start_x}]")
         # end_x, end_y = self.nearest_wall.end
         # print(f"end: [{end_y}, {-end_x}]\n")
+
+    def change_speed_according_to_front(self, d):
+        speed = self.controlPanel.xSpeedSpinBox.value()
+        # print(f"min_d: {d}, cur_speed: {speed}")
+        if d < 1:
+            if speed > 0.3:
+                self.controlPanel.xSpeedSpinBox.setValue(speed - 0.1)
+        else:
+            if speed < self.initial_x_speed:
+                self.controlPanel.xSpeedSpinBox.setValue(speed + 0.1)
+
+
+    def on_obstacle(self, data: Obstacles):
+        min_ob = float('inf')
+        for c in data.circles:
+            x, y = c.center.x, c.center.y
+            d = dist((x, y), (0, 0))
+            if x > 0 and -0.577 < y / x < 0.577:
+                if d < min_ob:
+                    min_ob = d
+                if d < 0.7:
+                    # print(f"Obstacle Found: {c}")
+                    self.is_colliding_others = True
+                    return
+        self.change_speed_according_to_front(min_ob)
+        self.is_colliding_others = False
 
     def setup_auditory(self):
         if self.auditory_process is None:
@@ -674,21 +723,29 @@ class Robot(Thread):
         # sleep(1)
 
     def is_colliding_wall(self):
+        min_d = float('inf')
         if self.__state == self.just_started_state:
             for wall in self.walls:
-                if -90 < wall.angle < 90 and wall.radius < WALL_MIN_DISTANCE:
-                    self.colliding_wall = wall
-                    print(f"Colliding Wall:\n{wall}")
-                    return wall
-            return None
+                if -90 < wall.angle < 90:
+                    if wall.radius < min_d:
+                        min_d = wall.radius
+                    if wall.radius < WALL_MIN_DISTANCE:
+                        self.colliding_wall = wall
+                        print(f"Colliding Wall:\n{wall}")
+                        return wall
         else:
             for wall in self.walls:
                 start_x, _ = wall.start
                 end_x, _ = wall.end
-                if start_x * end_x < 0 and -45 < wall.angle < 45 and wall.radius < WALL_MIN_DISTANCE:
-                    self.colliding_wall = wall
-                    print(f"Colliding Wall:\n{wall}")
-                    return wall
+                if start_x * end_x < 0 and -45 < wall.angle < 45:
+                    if wall.radius < min_d:
+                        min_d = wall.radius
+                    if wall.radius < WALL_MIN_DISTANCE:
+                        self.colliding_wall = wall
+                        print(f"Colliding Wall:\n{wall}")
+                        return wall
+        self.change_speed_according_to_front(min_d)
+        return None
             # walls = []
             # if self.collide_turn_function == self.turn_left:
             #     for wall in self.walls:
@@ -718,10 +775,9 @@ class Robot(Thread):
             #                 self.next_wall = j
             #                 print(f"Corner:\n{i}\n{j}")
             #                 return j
-            return None
 
     def is_colliding_another_robot(self):
-        return False  # TODO
+        return self.is_colliding_others  # TODO
 
     def is_visiting_turning_point(self):
         if self.collide_turn_function is None:
