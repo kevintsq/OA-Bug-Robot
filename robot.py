@@ -66,7 +66,10 @@ class Robot(Thread):
             robot: Robot = self.get_robot()
             if robot.colliding_wall:
                 if robot.auditory_process:
-                    azimuth = robot.get_azimuths_from_sound().pop()
+                    v = Vector2D(0, 0)
+                    for a in robot.get_azimuths_from_sound():
+                        v += Vector2D.from_azimuth(a)
+                    azimuth = v.to_azimuth()
                     if azimuth < 0:  # need to turn left
                         robot.turn_degree(robot.colliding_wall.angle + 90, True)
                     else:  # need to turn right
@@ -148,7 +151,7 @@ class Robot(Thread):
 
     def __init__(self, *args, **kwargs):
         super().__init__(daemon=True, *args, **kwargs)
-        self.tag_id = ""  # TODO
+        self.tag_id = "C3"  # TODO: "8B", "AC", "C3", "D2"
         self.pump_output = 0
         self.initial_azimuth = None
         self.initial_x_speed = 0.5
@@ -326,15 +329,16 @@ class Robot(Thread):
 
     def update_auditory_info(self, info):
         tagId = info["tagId"]
-        timeStamp = self.auditory_tags[tagId]
-        if timeStamp % 10 == 0:
-            self.mainWindow.soundDirectionView.updatePoints(tagId, info["azimuth"])
-        if timeStamp % 30 == 0:
-            # print(info)
-            timeStamp //= 30
-            self.mainWindow.distanceView.update(timeStamp, tagId, info["distance"])
-            self.mainWindow.elevationView.update(timeStamp, tagId, info["elevation"])
-        self.auditory_tags[tagId] += 1
+        if tagId != self.tag_id:
+            timeStamp = max(self.auditory_tags.values())
+            if timeStamp % 10 == 0:
+                self.mainWindow.soundDirectionView.updatePoints(tagId, info["azimuth"])
+            if timeStamp % 30 == 0:
+                # print(info)
+                timeStamp //= 30
+                self.mainWindow.distanceView.update(timeStamp, tagId, info["distance"])
+                self.mainWindow.elevationView.update(timeStamp, tagId, info["elevation"])
+            self.auditory_tags[tagId] += 1
 
     def get_olfactory_info(self):
         with self.olfactory_device.lock:

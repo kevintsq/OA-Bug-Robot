@@ -4,6 +4,7 @@ from threading import Condition, Thread, Event
 import json
 import socketserver
 from struct import Struct
+import math
 
 from serial import Serial
 
@@ -12,6 +13,22 @@ BLUE = (255, 0, 0)
 GREEN = (0, 255, 0)
 RED = (0, 0, 255)
 RESOLUTION = 360 / 1147
+
+
+class Vector2D:
+    def __init__(self, x, y) -> None:
+        self.x = x
+        self.y = y
+    
+    def __add__(self, v):
+        return Vector2D(self.x + v.x, self.y + v.y)
+    
+    @staticmethod
+    def from_azimuth(a):
+        return Vector2D(math.cos(a), math.sin(a))
+
+    def to_azimuth(self):
+        return math.degrees(math.atan2(self.y, self.x))
 
 
 def scan_index(azimuth):
