@@ -74,9 +74,17 @@ class Robot(Thread):
         def transfer_when_not_following_wall(self):
             super().transfer_when_not_following_wall()
             robot: Robot = self.get_robot()
-            azimuth = robot.get_azimuths_from_sound().pop()
-            current = int(robot.get_yaw(robot.motion_info.get()))
-            robot.turn_degree(normalize_azimuth(azimuth - current))  # TODO: + 180?
+            if robot.auditory_process:
+                azimuth = robot.get_azimuths_from_sound().pop()
+                if azimuth > 0:
+                    azimuth -= 180
+                else:
+                    azimuth += 180
+                current = int(robot.get_yaw(robot.motion_info.get()))
+                robot.turn_degree(normalize_azimuth(azimuth))  # TODO: check
+            else:
+                current = int(robot.get_yaw(robot.motion_info.get()))
+                robot.turn_degree(normalize_azimuth(robot.initial_azimuth - current))
             robot.collide_turn_function = None
 
     class FollowingWallState(AbstractState):
@@ -211,6 +219,7 @@ class Robot(Thread):
         # self.right_front_angles = []
         self.turning_point = False
         self.collide_turn_function = None
+        self.initial_azimuth = None
 
         self.just_started_state = self.JustStartedState(self)
         self.following_wall_state = self.FollowingWallState(self)
@@ -375,12 +384,17 @@ class Robot(Thread):
         self.collide_turn_function = None
         self.in_room = False
         self.mission_complete = False
+        self.initial_azimuth = None
         self.controlPanel.startButton.setText("Start the Algorithm")
         self.controlPanel.startButton.setEnabled(True)
         self.controlPanel.setConnectionButtonsEnabled(True)
 
+    def set_initial_azimuth(self):
+        self.initial_azimuth = self.get_yaw(self.motion_info.get())
+
     def on_start_button_clicked(self):
         if self.stop_event.is_set():
+            self.set_initial_azimuth()
             self.stop_event.clear()
             self.mainWindow.setWindowTitle(f"{self.__state}")
             self.controlPanel.startButton.setText("Algorithm Started. Press Again to Pause")
