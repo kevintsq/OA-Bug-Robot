@@ -3,7 +3,7 @@ import sys
 
 from PyQt5.QtChart import QValueAxis, QSplineSeries, QChart, QChartView, QPolarChart, QScatterSeries
 from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QProgressBar, QDoubleSpinBox, QPushButton, \
-    QComboBox, QSizePolicy, QLineEdit
+    QComboBox, QSizePolicy, QLineEdit, QSpinBox
 from PyQt5.QtGui import QPainter, QImage, QPixmap, QIcon
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -15,17 +15,13 @@ TAG_IDS = ["8B", "AC", "C3", "D2"]
 class SmallControl(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
-        self.leftButton = QPushButton(self)
-        self.leftButton.setText("Left")
+        self.leftButton = QPushButton("Left", self)
         self.leftButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.rightButton = QPushButton(self)
-        self.rightButton.setText("Right")
+        self.rightButton = QPushButton("Right", self)
         self.rightButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.frontButton = QPushButton(self)
-        self.frontButton.setText("Front")
+        self.frontButton = QPushButton("Front", self)
         self.frontButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.backButton = QPushButton(self)
-        self.backButton.setText("Back")
+        self.backButton = QPushButton("Back", self)
         self.backButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         layout = QGridLayout()
         layout.addWidget(self.leftButton, 1, 0, 2, 2)
@@ -51,45 +47,58 @@ class ControlPanel(QWidget):
         super().__init__(parent)
         controllerLabel = QLabel("Controller", self)
         self.controllerDropdown = AutoUpdatedComboBox(self)
-        self.controllerButton = QPushButton(self)
-        self.controllerButton.setText("Connect")
+        self.controllerButton = QPushButton("Connect", self)
         self.controllerDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         visionLabel = QLabel("Vision", self)
         self.visionDropdown = AutoUpdatedComboBox(self)
-        self.visionButton = QPushButton(self)
-        self.visionButton.setText("Connect")
+        self.visionButton = QPushButton("Connect", self)
         self.visionDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         auditoryLabel = QLabel("Auditory", self)
         self.auditoryDropdown = AutoUpdatedComboBox(self)
-        self.auditoryButton = QPushButton(self)
-        self.auditoryButton.setText("Connect")
+        self.auditoryButton = QPushButton("Connect", self)
         self.auditoryDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         olfactoryLabel = QLabel("Olfactory", self)
         self.olfactoryDropdown = AutoUpdatedComboBox(self)
-        self.olfactoryButton = QPushButton(self)
-        self.olfactoryButton.setText("Connect")
+        self.olfactoryButton = QPushButton("Connect", self)
         self.olfactoryDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         motionLabel = QLabel("Motion", self)
         self.motionDropdown = AutoUpdatedComboBox(self)
-        self.motionButton = QPushButton(self)
-        self.motionButton.setText("Connect")
+        self.motionButton = QPushButton("Connect", self)
         self.motionDropdown.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
-        batteryVoltageLabel = QLabel("Voltage", self)
-        self.batteryVoltage = QLabel(self)
+        # batteryVoltageLabel = QLabel("Voltage", self)
+        # self.batteryVoltage = QLabel(self)
 
-        batteryCurrentLabel = QLabel("Current", self)
-        self.batteryCurrent = QLabel(self)
+        # batteryCurrentLabel = QLabel("Current", self)
+        # self.batteryCurrent = QLabel(self)
 
-        batteryTemperatureLabel = QLabel("Temperature", self)
-        self.batteryTemperature = QLabel(self)
+        # batteryTemperatureLabel = QLabel("Temperature", self)
+        # self.batteryTemperature = QLabel(self)
 
-        batteryRemainingLabel = QLabel("Remaining", self)
-        self.batteryRemaining = QProgressBar(self)
+        # batteryRemainingLabel = QLabel("Remaining", self)
+        # self.batteryRemaining = QProgressBar(self)
+
+        olfactoryThreshLabel = QLabel('Olfactory Thresh')
+        self.olfactoryThresh = QSpinBox(self)
+        self.olfactoryThresh.setSingleStep(25)
+        self.olfactoryThresh.setMinimum(0)
+        self.olfactoryThresh.setMaximum(1023)
+
+        pumpOpenSecLabel = QLabel('Pump Open Seconds')
+        self.pumpOpenSec = QDoubleSpinBox(self)
+        self.pumpOpenSec.setDecimals(2)
+        self.pumpOpenSec.setMinimum(0.35)
+        self.pumpOpenSec.setSingleStep(0.05)
+
+        pumpCloseSecLabel = QLabel('Pump Close Seconds')
+        self.pumpCloseSec = QSpinBox(self)
+
+        self.pumpDebugButton = QPushButton("Debug Pump", self)
+        self.pumpDebugButton.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         xSpeedLabel = QLabel('xSpeed', self)
         self.xSpeedSpinBox = QDoubleSpinBox(self)
@@ -128,14 +137,22 @@ class ControlPanel(QWidget):
         layout.addWidget(self.motionDropdown, 4, 1)
         layout.addWidget(self.motionButton, 4, 2)
 
-        layout.addWidget(batteryVoltageLabel, 5, 0)
-        layout.addWidget(self.batteryVoltage, 5, 1, 1, 2)
-        layout.addWidget(batteryCurrentLabel, 6, 0)
-        layout.addWidget(self.batteryCurrent, 6, 1, 1, 2)
-        layout.addWidget(batteryTemperatureLabel, 7, 0)
-        layout.addWidget(self.batteryTemperature, 7, 1, 1, 2)
-        layout.addWidget(batteryRemainingLabel, 8, 0)
-        layout.addWidget(self.batteryRemaining, 8, 1, 1, 2)
+        # layout.addWidget(batteryVoltageLabel, 5, 0)
+        # layout.addWidget(self.batteryVoltage, 5, 1, 1, 2)
+        # layout.addWidget(batteryCurrentLabel, 6, 0)
+        # layout.addWidget(self.batteryCurrent, 6, 1, 1, 2)
+        # layout.addWidget(batteryTemperatureLabel, 7, 0)
+        # layout.addWidget(self.batteryTemperature, 7, 1, 1, 2)
+        # layout.addWidget(batteryRemainingLabel, 8, 0)
+        # layout.addWidget(self.batteryRemaining, 8, 1, 1, 2)
+
+        layout.addWidget(olfactoryThreshLabel, 5, 0)
+        layout.addWidget(self.olfactoryThresh, 5, 1)
+        layout.addWidget(pumpOpenSecLabel, 6, 0)
+        layout.addWidget(self.pumpOpenSec, 6, 1)
+        layout.addWidget(pumpCloseSecLabel, 7, 0)
+        layout.addWidget(self.pumpCloseSec, 7, 1)
+        layout.addWidget(self.pumpDebugButton, 5, 2, 3, 1)
 
         layout.addWidget(xSpeedLabel, 9, 0)
         layout.addWidget(self.xSpeedSpinBox, 9, 1)

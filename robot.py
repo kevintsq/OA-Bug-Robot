@@ -38,7 +38,9 @@ PUMP_CTRL_PIN = 17
 # JUDGE_355 = scan_index(355)
 # ANGLES = (FRONT, JUDGE_5, LEFT_FRONT, LEFT, BACK, RIGHT, RIGHT_FRONT, JUDGE_355)
 WALL_CROSS_THRESH = 0.2
-WALL_MIN_DISTANCE = 0.5
+FRONT_WALL_MIN_DISTANCE = 0.5
+SIDE_WALL_MIN_DISTANCE = 0.3
+SIDE_WALL_MAX_DISTANCE = 1.0
 # WALL_UPPER_THRESH = 0.5 / math.sin(LEFT_FRONT_ANGLE)
 # WALL_LOWER_THRESH = 0.3 / math.sin(LEFT_FRONT_ANGLE)
 
@@ -87,7 +89,10 @@ class Robot(Thread):
             super().transfer_when_not_following_wall()
             robot: Robot = self.get_robot()
             if robot.auditory_process:
-                azimuth = robot.get_azimuths_from_sound().pop()
+                v = Vector2D(0, 0)
+                for a in robot.get_azimuths_from_sound():
+                    v += Vector2D.from_azimuth(a)
+                azimuth = v.to_azimuth()
                 if azimuth > 0:
                     azimuth -= 180
                 else:
@@ -146,12 +151,12 @@ class Robot(Thread):
             elif robot.is_colliding_wall():
                 self.transfer_when_colliding_wall()
             else:
-                print("go_following_wall!")
+                # print("go_following_wall!")
                 robot.go_following_wall()
 
     def __init__(self, *args, **kwargs):
         super().__init__(daemon=True, *args, **kwargs)
-        self.tag_id = "C3"  # TODO: "8B", "AC", "C3", "D2"
+        self.tag_id = "8B"  # TODO: "8B", "AC", "C3", "D2"
         self.pump_output = 0
         self.initial_azimuth = None
         self.initial_x_speed = 0.5
@@ -182,9 +187,13 @@ class Robot(Thread):
         self.controlPanel.olfactoryButton.clicked.connect(self.setup_olfactory)
         self.controlPanel.motionButton.clicked.connect(self.setup_motion)
 
+        self.controlPanel.olfactoryThresh.setValue(300)
+        self.controlPanel.pumpOpenSec.setValue(0.35)
+        self.controlPanel.pumpCloseSec.setValue(10)
         self.controlPanel.xSpeedSpinBox.setValue(self.initial_x_speed)
         self.controlPanel.zSpeedSpinBox.setValue(0.5)
 
+        self.controlPanel.pumpDebugButton.clicked.connect(self.on_debug_pump_button_clicked)
         self.controlPanel.goButton.clicked.connect(self.on_go_button_clicked)
         self.controlPanel.stopButton.clicked.connect(self.on_stop_button_clicked)
         self.controlPanel.startButton.clicked.connect(self.on_start_button_clicked)
@@ -243,6 +252,7 @@ class Robot(Thread):
         # self.right_front_angles = []
         self.turning_point = False
         self.collide_turn_function = None
+        self.is_colliding_others = False
 
         self.just_started_state = self.JustStartedState(self)
         self.following_wall_state = self.FollowingWallState(self)
@@ -343,13 +353,17 @@ class Robot(Thread):
     def get_olfactory_info(self):
         with self.olfactory_device.lock:
             self.olfactory_device.instance.write(b" ")
-            result = self.olfactory_device.instance.read_until(b"\r")
-            return json.loads(result)
+            try:
+                result = self.olfactory_device.instance.read_until(b"\r")
+                return json.loads(result)
+            except:
+                return {"timeStamp": -1, "value": -1}
 
     def update_olfactory_info(self):
         info = self.get_olfactory_info()
-        if info["value"] > 100:
-            print(f"Olfactory higher than 100!")
+        thresh = self.controlPanel.olfactoryThresh.value()
+        if info["value"] > thresh:
+            print(f"Olfactory higher than {thresh}!")
             self.has_revisited_places = True
         timestamp = info["timeStamp"]
         if timestamp % 10 == 0:
@@ -364,11 +378,19 @@ class Robot(Thread):
             GPIO.output(PUMP_CTRL_PIN, 1)
             if self.pump_stop_event.is_set():
                 return
-            sleep(0.35)
+            sleep(self.controlPanel.pumpOpenSec.value())
             GPIO.output(PUMP_CTRL_PIN, 0)
             if self.pump_stop_event.is_set():
                 return
-            sleep(1)
+            sleep(self.controlPanel.pumpCloseSec.value())
+
+    def on_debug_pump_button_clicked(self):
+        if self.pump_start_event.is_set():
+            self.pump_start_event.clear()
+            self.controlPanel.pumpDebugButton.setText("Start Pump")
+        else:
+            self.pump_start_event.set()
+            self.controlPanel.pumpDebugButton.setText("Stop Pump")
 
     def on_front_button_pressed(self):
         self.go_front(abs(self.controlPanel.xSpeedSpinBox.value()))
@@ -406,6 +428,7 @@ class Robot(Thread):
         self.next_wall = None
         self.turning_point = False
         self.collide_turn_function = None
+        self.is_colliding_others = False
         self.in_room = False
         self.mission_complete = False
         self.initial_azimuth = None
@@ -486,24 +509,66 @@ class Robot(Thread):
     def go_following_wall(self):
         assert self.collide_turn_function is not None
         if self.collide_turn_function == self.turn_left:
+            not_parallel_walls = []
             walls = []
             for wall in self.walls:
-                if wall.radius < 2 and -120 < wall.angle < -60 and not -95 < wall.angle < -85:
+                if wall.radius < 2 and -120 < wall.angle < -60:
+                    if not -95 < wall.angle < -85:
+                        not_parallel_walls.append(wall)
                     walls.append(wall)
             if walls:
                 nearest_wall = min(walls, key=lambda x: x.radius)
-                self.turn_degree(nearest_wall.angle + 90)
+                if nearest_wall.radius < SIDE_WALL_MIN_DISTANCE:
+                    print(f"Right Wall Too Near!\n{nearest_wall}")
+                    self.go_front_left(z_speed=0.1)
+                    # sleep(0.75)
+                    # self.go_front_right()
+                    return
+                elif nearest_wall.radius > SIDE_WALL_MAX_DISTANCE:
+                    print(f"Right Wall Too Far!\n{nearest_wall}")
+                    self.go_front_right(z_speed=0.1)
+                    # sleep(0.75)
+                    # self.go_front_left()
+                    return
+            if not_parallel_walls:
+                nearest_wall = min(not_parallel_walls, key=lambda x: x.radius)
+                # self.turn_degree(nearest_wall.angle + 90)
+                if nearest_wall.angle > -90:
+                    self.go_front_left(z_speed=0.1)
+                else:
+                    self.go_front_right(z_speed=0.1)
                 print(f"Right Wall:\n{nearest_wall}")
             else:
                 self.go_front()
         else:
+            not_parallel_walls = []
             walls = []
             for wall in self.walls:
-                if wall.radius < 2 and 60 < wall.angle < 120 and not 85 < wall.angle < 95:
+                if wall.radius < 2 and 60 < wall.angle < 120:
+                    if not 85 < wall.angle < 95:
+                        not_parallel_walls.append(wall)
                     walls.append(wall)
             if walls:
                 nearest_wall = min(walls, key=lambda x: x.radius)
-                self.turn_degree(nearest_wall.angle - 90)
+                if nearest_wall.radius < SIDE_WALL_MIN_DISTANCE:
+                    print(f"Left Wall Too Near!\n{nearest_wall}")
+                    self.go_front_right(z_speed=0.1)
+                    # sleep(0.75)
+                    # self.go_front_left()
+                    return
+                elif nearest_wall.radius > SIDE_WALL_MAX_DISTANCE:
+                    print(f"Left Wall Too Far!\n{nearest_wall}")
+                    self.go_front_left(z_speed=0.1)
+                    # sleep(0.75)
+                    # self.go_front_right()
+                    return
+            if not_parallel_walls:
+                nearest_wall = min(not_parallel_walls, key=lambda x: x.radius)
+                # self.turn_degree(nearest_wall.angle - 90)
+                if nearest_wall.angle < 90:
+                    self.go_front_right(z_speed=0.1)
+                else:
+                    self.go_front_left(z_speed=0.1)
                 print(f"Left Wall:\n{nearest_wall}")
             else:
                 self.go_front()
@@ -640,8 +705,8 @@ class Robot(Thread):
             # 限幅，一个最大的角速度，一个最小的可以转动的
             if yaw_rate < 0.1:
                 yaw_rate = 0.1
-            elif yaw_rate > 0.5:
-                yaw_rate = 0.5
+            elif yaw_rate > 1.0:
+                yaw_rate = 1.0
             # print(yaw_rate)
             if yaw_err > 0:
                 self.turn_left(abs(yaw_rate))
@@ -733,7 +798,7 @@ class Robot(Thread):
                 if -90 < wall.angle < 90:
                     if wall.radius < min_d:
                         min_d = wall.radius
-                    if wall.radius < WALL_MIN_DISTANCE:
+                    if wall.radius < FRONT_WALL_MIN_DISTANCE:
                         self.colliding_wall = wall
                         print(f"Colliding Wall:\n{wall}")
                         return wall
@@ -744,7 +809,7 @@ class Robot(Thread):
                 if start_x * end_x < 0 and -45 < wall.angle < 45:
                     if wall.radius < min_d:
                         min_d = wall.radius
-                    if wall.radius < WALL_MIN_DISTANCE:
+                    if wall.radius < FRONT_WALL_MIN_DISTANCE:
                         self.colliding_wall = wall
                         print(f"Colliding Wall:\n{wall}")
                         return wall
