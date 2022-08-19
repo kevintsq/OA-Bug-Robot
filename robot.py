@@ -156,7 +156,7 @@ class Robot(Thread):
 
     def __init__(self, *args, **kwargs):
         super().__init__(daemon=True, *args, **kwargs)
-        self.tag_id = "8B"  # TODO: "8B", "AC", "C3", "D2"
+        self.tag_id = "D2"  # TODO: "8B", "AC", "C3", "D2"
         self.pump_output = 0
         self.initial_azimuth = None
         self.initial_x_speed = 0.5
@@ -165,8 +165,9 @@ class Robot(Thread):
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(PUMP_CTRL_PIN, GPIO.OUT)
 
-        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+        # disable when using vc4-fkms-v3d on Raspberry Pi
+        # QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        # QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         self.app = QApplication(sys.argv)
         self.app.setWindowIcon(QIcon("plane.svg"))
         self.app.beep()
