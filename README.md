@@ -2,9 +2,25 @@
 
 This repo contains our implementation of the OA-Bug algorithm on the Lingao robot. The platform includes at least the following (may work on other platforms):
 
-- 64-bit Raspbian OS (Debian 10) on Raspberry Pi 4B
+- 64-bit Raspbian OS (Debian 10) on Raspberry Pi 4B with `wiringpi`
+
+  - To install `wiringpi` on 64-bit Raspbian OS, you can use these commands:
+
+    ```shell
+    dpkg --add-architecture armhf
+    sudo apt update
+    sudo apt install libc6
+    sudo apt --fix-broken install
+    sudo apt install libc++6:armhf
+    wget https://project-downloads.drogon.net/wiringpi-latest.deb
+    sudo dpkg -i wiringpi-latest.deb
+    gpio readall
+    ```
+
 - Python 3.6+
+
 - ROS noetic
+
 - `libqt5charts5-dev`
 
 To run the robot, set up all the hardware and make sure `roscore` is running, then run `python3 robot_using_ros.py` to start.
