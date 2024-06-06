@@ -1,5 +1,7 @@
 # OA-Bug-Robot
 
+![Platform](README.assets/Platform.jpg)
+
 This repo contains our implementation of the OA-Bug algorithm on the Lingao robot. The platform includes at least the following (may work on other platforms):
 
 - 64-bit Raspbian OS (Debian 10) on Raspberry Pi 4B with `wiringpi`
